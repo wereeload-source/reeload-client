@@ -1,0 +1,9 @@
+{
+  "name": "ReelOps",
+  "short_name": "ReelOps",
+  "start_url": "/m",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#df3b2b",
+  "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
