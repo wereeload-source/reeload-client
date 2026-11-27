@@ -36,6 +36,10 @@ cp .env.example .env.local     # Supabase URL + anon key (from `supabase start` 
 npm run dev                    # http://localhost:3000
 ```
 
+Until the Supabase URL and anon key are set, every page shows a **Setup needed** page that names the missing variables.
+
+To call the NestJS API (`reeload-server/api`, port 4000), use `api()` from `src/lib/api.ts`. It reads `NEXT_PUBLIC_API_URL`, sends JSON, adds a bearer token when you pass one, and throws `ApiError` with Nest's error message.
+
 Sign in with a seed user from reeload-server, e.g. `kavya@reelops.local` / `reelops123` (Admin) or `arjun@reelops.local` (Reelmaker; open on a phone or narrow window).
 
 ## Layout
@@ -49,6 +53,8 @@ src/
   lib/supabase/               browser + server clients
   lib/uploader.ts             multipart upload to R2 via presigned parts; resumes by asking the server which parts arrived
   lib/functions.ts            calls Supabase Edge Functions
+  lib/api.ts                  calls the NestJS API (NEXT_PUBLIC_API_URL)
+  lib/env.ts                  reads public env vars; names any that are missing
   components/                 chips, avatars, KPI tiles, page bar
 ```
 

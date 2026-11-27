@@ -1,10 +1,13 @@
 // Public client download page. No login: the token is checked by the share-link-resolve function.
+import { supabaseEnv } from "@/lib/env";
+
 type Result = { client: string; job: string; expires_at: string; files: { name: string; kind: string; size_bytes: number; url: string }[] } | { error: string };
 
 export default async function Download({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/share-link-resolve?token=${encodeURIComponent(token)}`, {
-    headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+  const { url, anonKey } = supabaseEnv();
+  const res = await fetch(`${url}/functions/v1/share-link-resolve?token=${encodeURIComponent(token)}`, {
+    headers: { apikey: anonKey },
     cache: "no-store",
   });
   const data = (await res.json()) as Result;

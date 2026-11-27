@@ -1,13 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { supabaseEnv } from "@/lib/env";
 import type { Profile } from "@/lib/types";
 
 export async function createClient() {
+  // cookies() first: it marks the page as per-request, so the env check never runs during the build's prerender.
   const cookieStore = await cookies();
+  const { url, anonKey } = supabaseEnv();
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
