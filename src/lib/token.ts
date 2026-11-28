@@ -4,6 +4,8 @@
  */
 export const ACCESS_COOKIE = "reeload_access";
 export const REFRESH_COOKIE = "reeload_refresh";
+/** The path being opened, set by the proxy so layouts can check the role before a page starts streaming. */
+export const PATH_HEADER = "x-reeload-path";
 
 export const API_URL = () => (process.env.API_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 

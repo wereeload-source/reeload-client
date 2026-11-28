@@ -41,7 +41,7 @@ export async function signIn(_: unknown, form: FormData) {
 }
 
 /** Ends the sign-in on the server (the refresh token stops working), then clears the cookies. */
-export async function signOut() {
+export async function endSession() {
   const jar = await cookies();
   const refresh = jar.get(REFRESH_COOKIE)?.value;
   if (refresh) {
@@ -55,5 +55,10 @@ export async function signOut() {
   }
   jar.delete(ACCESS_COOKIE);
   jar.delete(REFRESH_COOKIE);
+}
+
+/** Sign out from a plain form (no JavaScript needed). */
+export async function signOut() {
+  await endSession();
   redirect("/login");
 }

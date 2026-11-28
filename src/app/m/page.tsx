@@ -3,15 +3,16 @@ import { LinkButton } from "@/components/link-button";
 import { Chip, Empty } from "@/components/ui";
 import { fullDay, hours, isToday, istDate, longDay, window_ } from "@/lib/format";
 import { api, requireProfile } from "@/lib/session";
-import type { HoursRow, Shoot } from "@/lib/types";
+import type { HoursRow, Notifications, Shoot } from "@/lib/types";
 import { MHeader, MMain } from "./header";
 import { Respond } from "./respond";
 
 export default async function MyShoots() {
   const { me } = await requireProfile();
-  const [all, sum] = await Promise.all([
+  const [all, sum, unread] = await Promise.all([
     api.get<Shoot[]>("/me/shoots?when=upcoming"),
     api.get<{ month: string; items: HoursRow[] }>(`/hours?month=${istDate().slice(0, 7)}`).catch(() => ({ month: "", items: [] as HoursRow[] })),
+    api.get<Notifications>("/notifications?unread=true&limit=1").then((n) => n.unread, () => 0),
   ]);
   const shoots = all
     .filter((s) => s.assignment_status === "pending" || s.assignment_status === "accepted")
@@ -21,7 +22,7 @@ export default async function MyShoots() {
 
   return (
     <>
-      <MHeader title="My shoots" subtitle={`${me.full_name} · Reelmaker`} signOutButton />
+      <MHeader title="My shoots" subtitle={`${me.full_name} · Reelmaker`} me={{ full_name: me.full_name, email: me.email, role: me.role }} unread={unread} />
       <MMain>
         <div className="text-[13px] font-medium text-mute">
           {fullDay().replace(/,? \d{4}$/, "")} · {today} {today === 1 ? "shoot" : "shoots"} today

@@ -1,4 +1,4 @@
-import { canOpen, homeFor, menuFor, NAV, ROLE_NAV } from "./nav";
+import { canOpen, homeFor, mayOpenPath, menuFor, NAV, ROLE_NAV } from "./nav";
 
 describe("navigation by role", () => {
   it("sends each role to its first page", () => {
@@ -27,5 +27,18 @@ describe("menuFor", () => {
     expect(menuFor("ops")[0]).toBe("assign");
     expect(menuFor("ops").map((k) => NAV[k].label)).toEqual(["Unassigned", "Calendar", "Review files", "Reelmakers and leave", "Jobs"]);
     expect(new Set(menuFor("admin")).size).toBe(menuFor("admin").length);
+  });
+});
+
+describe("mayOpenPath", () => {
+  it("lets each role open only its own pages and the account page", () => {
+    expect(mayOpenPath("sales", "/users")).toBe(false);
+    expect(mayOpenPath("sales", "/jobs/new")).toBe(true);
+    expect(mayOpenPath("ops", "/jobs/new")).toBe(false);
+    expect(mayOpenPath("ops", "/jobs/abc")).toBe(true);
+    expect(mayOpenPath("accounts", "/payments/receipt/x")).toBe(true);
+    expect(mayOpenPath("accounts", "/jobs")).toBe(false);
+    expect(mayOpenPath("accounts", "/account")).toBe(true);
+    expect(mayOpenPath("admin", "/settings")).toBe(true);
   });
 });

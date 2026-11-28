@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOptions, needsRefresh, refreshSession } from "@/lib/token";
+import { ACCESS_COOKIE, PATH_HEADER, REFRESH_COOKIE, cookieOptions, needsRefresh, refreshSession } from "@/lib/token";
 
 /** Open without a sign-in: the login page and the client download links. */
 const PUBLIC = ["/login", "/d/"];
@@ -17,12 +17,15 @@ export async function proxy(request: NextRequest) {
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
 
-  if (!needsRefresh(access)) return NextResponse.next();
+  const forward = new Headers(request.headers);
+  forward.set(PATH_HEADER, path);
+
+  if (!needsRefresh(access)) return NextResponse.next({ request: { headers: forward } });
 
   const pair = refresh ? await refreshSession(refresh) : null;
   if (pair) {
     // Pass the new tokens on to this request (so the page sees them) and to the browser (for next time).
-    const headers = new Headers(request.headers);
+    const headers = forward;
     const jar = request.cookies
       .getAll()
       .filter((c) => c.name !== ACCESS_COOKIE && c.name !== REFRESH_COOKIE)
@@ -35,7 +38,7 @@ export async function proxy(request: NextRequest) {
     return res;
   }
 
-  if (isPublic) return NextResponse.next();
+  if (isPublic) return NextResponse.next({ request: { headers: forward } });
 
   // The browser's own calls to the API get a plain 401 it can act on; pages get the login screen.
   if (path.startsWith("/api/")) return Response.json({ statusCode: 401, message: "Please sign in again" }, { status: 401 });

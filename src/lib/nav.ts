@@ -33,3 +33,16 @@ export const homeFor = (role: Role): string => (role === "reelmaker" ? "/m" : NA
 
 /** True when `role` may open the console page at `key`. */
 export const canOpen = (role: Role, key: NavKey): boolean => role !== "reelmaker" && ROLE_NAV[role].includes(key);
+
+/**
+ * Whether `role` may open the console page at `path` (checked in the console layout, before the
+ * page streams, so a refused page is a real redirect). "My account" is open to every office role.
+ */
+export function mayOpenPath(role: Role, path: string): boolean {
+  if (role === "reelmaker") return false;
+  const first = path.split("/")[1] ?? "";
+  if (first === "account" || first === "") return true;
+  if (path === "/jobs/new" || path.startsWith("/jobs/new/")) return role === "admin" || role === "sales";
+  const key = (Object.keys(NAV) as NavKey[]).find((k) => NAV[k].href === `/${first}`);
+  return key ? canOpen(role, key) : true;
+}

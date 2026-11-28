@@ -1,14 +1,17 @@
-import { Button } from "@heroui/react";
-import { ChevronLeft, LogOut } from "lucide-react";
-import { signOut } from "@/app/login/actions";
+import { ChevronLeft } from "lucide-react";
 import { LinkButton } from "@/components/link-button";
+import { NoticeBell } from "@/components/notice-bell";
+import { UserMenu } from "@/components/user-menu";
+import type { Role } from "@/lib/types";
 
 /**
  * The dark header from the reelmaker mockup: title, a grey line under it, an optional back button,
  * and the three check-in step dots on a shoot.
  */
-export function MHeader({ title, subtitle, back, step, signOutButton }: {
-  title: string; subtitle?: string; back?: string; step?: 1 | 2 | 3; signOutButton?: boolean;
+export function MHeader({ title, subtitle, back, step, me, unread = 0 }: {
+  title: string; subtitle?: string; back?: string; step?: 1 | 2 | 3;
+  /** Shows the bell and the avatar menu (on the home screen). */
+  me?: { full_name: string; email: string; role: Role }; unread?: number;
 }) {
   return (
     <header className="sticky top-0 z-20 flex min-h-16 flex-none items-center gap-3 bg-side px-4 pb-3.5 pt-[max(env(safe-area-inset-top),14px)] text-white">
@@ -28,12 +31,11 @@ export function MHeader({ title, subtitle, back, step, signOutButton }: {
           ))}
         </div>
       )}
-      {signOutButton && (
-        <form action={signOut}>
-          <Button type="submit" variant="ghost" size="sm" className="text-sidemute2 hover:bg-side2 hover:text-white">
-            <LogOut aria-hidden className="size-4" /> Sign out
-          </Button>
-        </form>
+      {me && (
+        <div className="flex items-center">
+          <NoticeBell unread={unread} dark />
+          <UserMenu me={me} dark />
+        </div>
       )}
     </header>
   );
