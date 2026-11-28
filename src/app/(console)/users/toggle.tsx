@@ -1,14 +1,16 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useTransition } from "react";
+import { setActive } from "./actions";
 
 export function ToggleUser({ id, active }: { id: string; active: boolean }) {
-  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   return (
-    <button className="btn" onClick={async () => {
-      const { error } = await createClient().from("profiles").update({ active: !active }).eq("id", id);
-      if (error) alert(error.message);
-      router.refresh();
-    }}>{active ? "Disable" : "Enable"}</button>
+    <>
+      <button className="btn" disabled={pending} onClick={() => start(async () => setError((await setActive(id, !active)).error ?? null))}>
+        {active ? "Disable" : "Enable"}
+      </button>
+      {error && <div className="text-[12.5px] text-rec">{error}</div>}
+    </>
   );
 }

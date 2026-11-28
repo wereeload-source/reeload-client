@@ -1,20 +1,21 @@
 import { redirect } from "next/navigation";
-import { requireProfile } from "@/lib/supabase/server";
+import { api, requireProfile } from "@/lib/session";
 import { PageBar, Pane } from "@/components/page-bar";
 import { Avatar, Chip } from "@/components/ui";
 import { ROLE_LABEL, type Profile } from "@/lib/types";
+import { NewUser } from "./new-user";
 import { ToggleUser } from "./toggle";
 
 export default async function UsersPage() {
-  const { supabase, me } = await requireProfile();
+  const { me } = await requireProfile();
   if (me.role !== "admin") redirect("/");
-  const { data } = await supabase.from("profiles").select("*").order("role").order("full_name");
-  const users = (data ?? []) as Profile[];
+  const users = await api.get<(Profile & { kind: string | null; base_city: string | null })[]>("/users");
   return (
     <>
       <PageBar title="Users" />
       <Pane>
-        <p className="text-[13px] text-mute">Inviting new users needs the admin invite function (see the server README). Disabled users cannot sign in.</p>
+        <NewUser />
+        <p className="text-[13px] text-mute">Disabled users cannot sign in. Give new users a temporary password and ask them to change it.</p>
         <div className="card px-2 py-1.5">
           <table className="tbl">
             <thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Status</th><th /></tr></thead>

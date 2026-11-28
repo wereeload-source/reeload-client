@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireProfile } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/session";
 import { homeFor } from "@/lib/types";
 
 export default async function Home() {

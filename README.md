@@ -26,14 +26,14 @@ Next.js 16 (App Router, React 19) · Tailwind CSS 4 · Supabase (`@supabase/ssr`
 | `/m/hours` | Reelmaker | own hours this month |
 | `/d/[token]` | client, no login | download page for a 7-day link |
 
-Which pages each role sees is in `src/lib/types.ts` (`ROLE_NAV`). The database enforces the real permissions; the nav only hides what a role can't use.
+Which pages each role sees is in `src/lib/types.ts` (`ROLE_NAV`). The API enforces the real permissions per role; the nav only hides what a role can't use.
 
 ## Getting started
 
 ```bash
-npm install
-cp .env.example .env.local     # Supabase URL + anon key (from `supabase start` in reeload-server)
-npm run dev                    # http://localhost:3000
+pnpm install
+cp .env.example .env.local     # API_URL of reeload-server's api (http://localhost:4000)
+pnpm dev                       # http://localhost:3000
 ```
 
 Sign in with a seed user from reeload-server, e.g. `kavya@reelops.local` / `reelops123` (Admin) or `arjun@reelops.local` (Reelmaker; open on a phone or narrow window).
@@ -42,7 +42,9 @@ Sign in with a seed user from reeload-server, e.g. `kavya@reelops.local` / `reel
 
 ```
 src/
-  proxy.ts                    refreshes the Supabase session, sends signed-out users to /login
+  proxy.ts                    sends visitors without a live login token to /login
+  lib/session.ts              server-side API calls with the httpOnly token cookie; requireProfile()
+  lib/api-client.ts           browser calls through /api/proxy (the token never reaches page scripts)
   app/(console)/              office console: sidebar layout + one folder per page
   app/m/                      reelmaker phone app
   app/d/[token]/              public download page

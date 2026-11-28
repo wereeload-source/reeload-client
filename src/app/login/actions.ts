@@ -1,20 +1,36 @@
 "use server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { API_URL, TOKEN_COOKIE, messageOf } from "@/lib/session";
 
 export async function signIn(_: unknown, form: FormData) {
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: String(form.get("email")),
-    password: String(form.get("password")),
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL()}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? "") }),
+      cache: "no-store",
+    });
+  } catch {
+    return { error: "Cannot reach the server. Try again in a moment." };
+  }
+  const data = (await res.json().catch(() => null)) as { token?: string; expires_at?: string } | null;
+  if (!res.ok || !data?.token) {
+    return { error: res.status === 429 ? messageOf(data, "Too many tries. Wait a while.") : "Wrong email or password" };
+  }
+  (await cookies()).set(TOKEN_COOKIE, data.token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: data.expires_at ? new Date(data.expires_at) : undefined,
   });
-  if (error) return { error: "Wrong email or password" };
   const next = String(form.get("next") || "/");
-  redirect(next.startsWith("/") ? next : "/");
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
 }
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  (await cookies()).delete(TOKEN_COOKIE);
   redirect("/login");
 }

@@ -1,18 +1,14 @@
 import { redirect } from "next/navigation";
-import { requireProfile } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/session";
 import { ROLE_LABEL, ROLE_NAV } from "@/lib/types";
 import { Avatar } from "@/components/ui";
 import { signOut } from "@/app/login/actions";
 import { Sidebar } from "./sidebar";
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, me } = await requireProfile();
+  const { me } = await requireProfile();
   if (me.role === "reelmaker") redirect("/m");
   const items = ROLE_NAV[me.role];
-
-  const { count: unassigned } = items.includes("assign")
-    ? await supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "confirmed")
-    : { count: 0 };
 
   return (
     <div className="grid min-h-dvh grid-cols-[220px_minmax(0,1fr)]">
@@ -21,7 +17,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
           {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG */}
           <img src="/logo.svg" alt="" width={30} height={30} className="rounded-[9px] shadow-[0_0_0_3px_rgba(223,59,43,.18)]" /> ReelOps
         </div>
-        <Sidebar items={items} badges={{ assign: unassigned ?? 0 }} />
+        <Sidebar items={items} badges={{}} />
         <div className="mt-auto border-t border-[#22252a] pt-3">
           <div className="mb-1.5 ml-1 text-[13px] text-[#5f646d]">Signed in as</div>
           <div className="flex items-center gap-2 px-1">
