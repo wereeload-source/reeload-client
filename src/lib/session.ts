@@ -2,9 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Profile } from "@/lib/types";
 
-import { TOKEN_COOKIE } from "@/lib/token";
-
-export const API_URL = () => (process.env.API_URL ?? "http://localhost:4000").replace(/\/+$/, "");
+import { ACCESS_COOKIE, API_URL } from "@/lib/token";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -20,7 +18,7 @@ export function messageOf(body: unknown, fallback: string): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value;
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   let res: Response;
   try {
     res = await fetch(`${API_URL()}${path}`, {
@@ -35,7 +33,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   } catch {
     throw new ApiError(503, "Cannot reach the server. Try again in a moment.");
   }
-  // Expired or disabled: sign in again.
+  // The proxy renews tokens before pages run, so a 401 here means the sign-in is over (expired, signed out or disabled).
   if (res.status === 401 && token) redirect("/login");
   const text = await res.text();
   const data = text ? (JSON.parse(text) as unknown) : null;
@@ -65,7 +63,7 @@ export async function attempt<T>(fn: () => Promise<T>): Promise<{ data: T; error
 
 /** The signed-in user's profile, or a redirect to /login. Disabled users are sent away too. */
 export async function requireProfile(): Promise<{ me: Profile }> {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value;
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!token) redirect("/login");
   try {
     return { me: await api.get<Profile>("/me") };

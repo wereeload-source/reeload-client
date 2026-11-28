@@ -1,7 +1,8 @@
 "use server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { API_URL, TOKEN_COOKIE, messageOf } from "@/lib/session";
+import { messageOf } from "@/lib/session";
+import { ACCESS_COOKIE, API_URL, REFRESH_COOKIE, cookieOptions, type TokenPair } from "@/lib/token";
 
 export async function signIn(_: unknown, form: FormData) {
   let res: Response;
@@ -15,22 +16,30 @@ export async function signIn(_: unknown, form: FormData) {
   } catch {
     return { error: "Cannot reach the server. Try again in a moment." };
   }
-  const data = (await res.json().catch(() => null)) as { token?: string; expires_at?: string } | null;
-  if (!res.ok || !data?.token) {
+  const data = (await res.json().catch(() => null)) as Partial<TokenPair> | null;
+  if (!res.ok || !data?.access_token || !data.refresh_token) {
     return { error: res.status === 429 ? messageOf(data, "Too many tries. Wait a while.") : "Wrong email or password" };
   }
-  (await cookies()).set(TOKEN_COOKIE, data.token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: data.expires_at ? new Date(data.expires_at) : undefined,
-  });
+  const jar = await cookies();
+  jar.set(ACCESS_COOKIE, data.access_token, cookieOptions());
+  jar.set(REFRESH_COOKIE, data.refresh_token, cookieOptions());
   const next = String(form.get("next") || "/");
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
 }
 
+/** Ends the sign-in on the server (the refresh token stops working), then clears the cookies. */
 export async function signOut() {
-  (await cookies()).delete(TOKEN_COOKIE);
+  const jar = await cookies();
+  const refresh = jar.get(REFRESH_COOKIE)?.value;
+  if (refresh) {
+    await fetch(`${API_URL()}/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+      cache: "no-store",
+    }).catch(() => undefined);
+  }
+  jar.delete(ACCESS_COOKIE);
+  jar.delete(REFRESH_COOKIE);
   redirect("/login");
 }

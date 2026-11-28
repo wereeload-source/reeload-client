@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
-import { API_URL, TOKEN_COOKIE } from "@/lib/session";
+import { ACCESS_COOKIE, API_URL } from "@/lib/token";
 
 /**
  * Forwards browser calls to the API with the signed-in user's token added from the httpOnly cookie.
@@ -8,7 +8,7 @@ import { API_URL, TOKEN_COOKIE } from "@/lib/session";
  */
 async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value;
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   if (!token) return Response.json({ statusCode: 401, message: "Please sign in again" }, { status: 401 });
 
   const target = `${API_URL()}/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
