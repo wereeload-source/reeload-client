@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // The development badge sat on top of the sidebar's Sign out button.
+  devIndicators: { position: "bottom-right" },
   // Every screen needs the signed-in user, so none can be prerendered; loading.tsx files show a
   // skeleton at once instead. Only check instant navigation where a page opts in with `instant`.
   experimental: {

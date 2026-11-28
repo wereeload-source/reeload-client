@@ -80,15 +80,16 @@ body {
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.015em; }
 
 @layer components {
-  .box { @apply rounded-[10px] border border-line bg-paper px-4 py-3.5; }
+  .box { @apply overflow-x-auto rounded-[10px] border border-line bg-paper px-4 py-3.5; }
   .box h3 { @apply mb-2.5 flex items-center gap-2 text-[15px] font-bold; }
   .field { @apply w-full rounded-[9px] border border-line bg-paper px-2.5 py-2 text-[15px]; }
   .tbl { @apply w-full border-collapse text-sm; }
+  .tbl td:first-child, .tbl th { @apply whitespace-nowrap; }
   .tbl th { @apply border-b border-line px-2.5 py-2 text-left text-[13px] font-semibold text-mute; }
   .tbl td { @apply border-b border-line p-2.5 align-middle; }
   .tbl tr:last-child td { @apply border-b-0; }
   .num { @apply text-right tabular-nums whitespace-nowrap; }
-  .kpis { @apply grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-paper md:grid-cols-4; }
+  .kpis { @apply grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-paper lg:grid-cols-4; }
   .kpi { @apply border-l border-line px-[18px] py-4 first:border-l-0; }
   .mbtn { @apply flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-rec p-3.5 text-base font-semibold text-white disabled:opacity-40; }
   .mbtn-ghost { @apply border border-line bg-paper text-ink; }

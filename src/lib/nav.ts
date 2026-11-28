@@ -26,6 +26,10 @@ export const ROLE_NAV: Record<Exclude<Role, "reelmaker">, NavKey[]> = {
   accounts: ["payments"],
 };
 
+/** The menu for a role, always in NAV order so each group heading appears once. */
+export const menuFor = (role: Exclude<Role, "reelmaker">): NavKey[] =>
+  (Object.keys(NAV) as NavKey[]).filter((k) => ROLE_NAV[role].includes(k));
+
 export const homeFor = (role: Role): string => (role === "reelmaker" ? "/m" : NAV[ROLE_NAV[role][0]].href);
 
 /** True when `role` may open the console page at `key`. */

@@ -114,7 +114,7 @@ export function AssignBoard({ jobs }: { jobs: QueueJob[] }) {
                       <Avatar name={c.full_name} />
                       <span className="flex-1">
                         <b>{c.full_name}</b><br />
-                        <span className="text-[13px] text-mute">{c.base_city}{c.same_city ? " · same city" : ""} · {c.shoots_next7_days} shoots this week</span>
+                        <span className="text-[13px] text-mute">{c.base_city}{c.same_city ? " · same city" : ""} · {c.shoots_next7_days} {c.shoots_next7_days === 1 ? "shoot" : "shoots"} this week</span>
                       </span>
                       <Chip tone={a.tone}>{a.label}</Chip>
                     </button>

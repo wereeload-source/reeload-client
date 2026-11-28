@@ -1,6 +1,8 @@
 "use server";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { homeFor } from "@/lib/nav";
+import type { Role } from "@/lib/types";
 import { ACCESS_COOKIE, API_URL, REFRESH_COOKIE, cookieOptions, safeNext, type TokenPair } from "@/lib/token";
 
 /** The browser's address, so the API's per-address login limit counts people, not this server. */
@@ -23,7 +25,7 @@ export async function signIn(_: unknown, form: FormData) {
   } catch {
     return { error: "Cannot reach the server. Try again in a moment." };
   }
-  const data = (await res.json().catch(() => null)) as Partial<TokenPair> | null;
+  const data = (await res.json().catch(() => null)) as (Partial<TokenPair> & { user?: { role?: Role } }) | null;
   if (!res.ok || !data?.access_token || !data.refresh_token) {
     if (res.status === 429) return { error: "Too many tries. Wait 15 minutes and try again." };
     if (res.status === 400) return { error: "Enter a valid email and password" };
@@ -33,7 +35,9 @@ export async function signIn(_: unknown, form: FormData) {
   const jar = await cookies();
   jar.set(ACCESS_COOKIE, data.access_token, cookieOptions());
   jar.set(REFRESH_COOKIE, data.refresh_token, cookieOptions());
-  redirect(safeNext(String(form.get("next") ?? "")));
+  // Go straight to this person's own home: "/" may still be cached from the previous person's session.
+  const next = safeNext(String(form.get("next") ?? ""));
+  redirect(next === "/" && data.user?.role ? homeFor(data.user.role) : next);
 }
 
 /** Ends the sign-in on the server (the refresh token stops working), then clears the cookies. */

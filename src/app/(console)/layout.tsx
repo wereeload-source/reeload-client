@@ -2,7 +2,7 @@ import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 import { Avatar } from "@/components/ui";
-import { ROLE_NAV } from "@/lib/nav";
+import { menuFor } from "@/lib/nav";
 import { api, requireProfile } from "@/lib/session";
 import { ROLE_LABEL, type Notifications } from "@/lib/types";
 import { Sidebar } from "./sidebar";
@@ -10,7 +10,7 @@ import { Sidebar } from "./sidebar";
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const { me } = await requireProfile();
   if (me.role === "reelmaker") redirect("/m");
-  const items = ROLE_NAV[me.role];
+  const items = menuFor(me.role);
   // The bell count is a nice-to-have: a failure here must not take the whole console down.
   const unread = await api.get<Notifications>("/notifications?unread=true&limit=1").then((n) => n.unread, () => 0);
 
