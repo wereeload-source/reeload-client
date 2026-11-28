@@ -1,87 +1,82 @@
+import { Clapperboard, Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { requireProfile } from "@/lib/supabase/server";
+import { LinkButton } from "@/components/link-button";
 import { PageBar, Pane } from "@/components/page-bar";
-import { StatusChip, Empty } from "@/components/ui";
+import { Empty, Panel, StatusChip } from "@/components/ui";
 import { day, inr, time } from "@/lib/format";
-import { JOB_SELECT, liveAssignment, type Job } from "@/lib/types";
+import { api, requirePage } from "@/lib/session";
+import { liveAssignment, type Job, type Paged } from "@/lib/types";
 
-const FILTERS = ["all", "lead", "draft", "confirmed", "assigned", "accepted", "reached", "uploaded", "released", "paid"];
+const FILTERS = ["all", "draft", "confirmed", "assigned", "accepted", "reached", "uploaded", "released", "paid", "cancelled"];
 
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ s?: string; q?: string }> }) {
-  const { s = "all", q = "" } = await searchParams;
-  const { supabase, me } = await requireProfile();
-  const money = me.role !== "ops";
-
-  if (me.role === "accounts") {
-    // Accounts sees client names only, through the jobs_accounts view.
-    let query = supabase.from("jobs_accounts").select("*").order("starts_at", { ascending: false });
-    if (s !== "all") query = query.eq("status", s);
-    const { data } = await query;
-    return (
-      <>
-        <PageBar title="Jobs" />
-        <Pane>
-          <div className="card px-2 py-1.5">
-            <table className="tbl"><thead><tr><th>Job</th><th>Client</th><th>City</th><th>Shoot</th><th>Status</th><th className="num">Total</th><th className="num">Balance</th></tr></thead>
-              <tbody>{(data ?? []).map((j) => (
-                <tr key={j.id}><td className="text-mute">{j.code}</td><td><b>{j.client_name}</b></td><td>{j.city}</td><td>{day(j.starts_at)}</td><td><StatusChip status={j.status} /></td>
-                  <td className="num">{inr(Number(j.agreed_amount ?? 0) + Number(j.approved_changes ?? 0))}</td><td className="num">{inr(Math.max(0, Number(j.balance ?? 0)))}</td></tr>
-              ))}</tbody></table>
-          </div>
-        </Pane>
-      </>
-    );
-  }
-
-  let query = supabase.from("jobs").select(JOB_SELECT).order("starts_at", { ascending: false, nullsFirst: true });
-  if (s !== "all") query = query.eq("status", s);
-  const [{ data: jobs }, { data: balances }] = await Promise.all([
-    query,
-    money ? supabase.from("job_balances").select("job_id, agreed_amount, approved_changes, balance") : Promise.resolve({ data: [] }),
-  ]);
-  const rows = ((jobs ?? []) as Job[]).filter((j) => !q || j.clients?.name.toLowerCase().includes(q.toLowerCase()) || j.clients?.phone.includes(q));
-  const bal = (id: string) => (balances ?? []).find((b) => b.job_id === id);
+  const { me } = await requirePage("jobs");
+  const sp = await searchParams;
+  const s = FILTERS.includes(sp.s ?? "") ? sp.s! : "all";
+  const q = (sp.q ?? "").slice(0, 80);
+  const qs = new URLSearchParams({ limit: "200" });
+  if (s !== "all") qs.set("status", s);
+  if (q) qs.set("q", q);
+  const { items: jobs, total } = await api.get<Paged<Job>>(`/jobs?${qs}`);
+  const money = me.role === "admin" || me.role === "sales";
 
   return (
     <>
       <PageBar title="Jobs">
-        {(me.role === "sales" || me.role === "admin") && <Link href="/jobs/new" className="btn btn-pri">+ New job</Link>}
+        {money && (
+          <LinkButton href="/jobs/new">
+            <Plus aria-hidden className="size-4" /> New job
+          </LinkButton>
+        )}
       </PageBar>
       <Pane>
-        <form className="card flex flex-wrap items-center gap-1.5">
+        <form className="card flex flex-wrap items-center gap-1.5" role="search">
           {FILTERS.map((f) => (
-            <Link key={f} href={`/jobs?s=${f}`} className={`rounded-full border px-3 py-1 text-[13px] font-semibold capitalize ${s === f ? "border-ink bg-ink text-paper" : "border-line bg-paper text-mute"}`}>{f}</Link>
+            <Link
+              key={f}
+              href={`/jobs?s=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+              aria-current={s === f ? "true" : undefined}
+              className={`rounded-full border px-3 py-1 text-[13px] font-semibold capitalize ${s === f ? "border-ink bg-ink text-paper" : "border-line bg-paper text-mute"}`}
+            >
+              {f}
+            </Link>
           ))}
           <span className="flex-1" />
           <input type="hidden" name="s" value={s} />
-          <input name="q" defaultValue={q} placeholder="Search client or phone" className="input w-56" aria-label="Search" />
+          <label className="relative">
+            <span className="sr-only">Search jobs</span>
+            <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-mute" />
+            <input name="q" defaultValue={q} placeholder="Client, phone, city or RL-1001" maxLength={80} className="input w-64 pl-8" />
+          </label>
         </form>
-        <div className="card px-2 py-1.5">
-          {rows.length ? (
+        <Panel flush>
+          {jobs.length ? (
             <table className="tbl">
-              <thead><tr><th>Job</th><th>Client</th><th>City</th><th>Shoot</th><th>Reelmaker</th><th>Status</th>{money && <><th className="num">Total</th><th className="num">Balance</th></>}</tr></thead>
+              <thead>
+                <tr>
+                  <th>Job</th><th>Client</th><th>City</th><th>Shoot</th><th>Reelmaker</th><th>Status</th>
+                  {money && <th className="num">Agreed</th>}
+                </tr>
+              </thead>
               <tbody>
-                {rows.map((j) => {
-                  const b = bal(j.id);
-                  return (
-                    <tr key={j.id}>
-                      <td className="whitespace-nowrap text-mute">{j.code}</td>
-                      <td><b>{j.clients?.name}</b></td>
-                      <td>{j.city}</td>
-                      <td className="whitespace-nowrap">{day(j.starts_at)} · {time(j.starts_at)}</td>
-                      <td>{liveAssignment(j)?.profiles?.full_name ?? <span className="text-mute">—</span>}</td>
-                      <td><StatusChip status={j.status} /></td>
-                      {money && <>
-                        <td className="num">{b ? inr(Number(b.agreed_amount) + Number(b.approved_changes)) : "—"}</td>
-                        <td className={`num ${b && Number(b.balance) <= 0 ? "text-ok" : ""}`}>{b ? inr(Math.max(0, Number(b.balance))) : "—"}</td>
-                      </>}
-                    </tr>
-                  );
-                })}
+                {jobs.map((j) => (
+                  <tr key={j.id} className="hover:bg-sub">
+                    <td className="whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="font-semibold text-rec hover:underline">{j.code}</Link></td>
+                    <td><b>{j.client_name}</b><div className="font-mono text-[12.5px] text-mute">{j.client_phone}</div></td>
+                    <td>{j.city}</td>
+                    <td className="whitespace-nowrap">{j.starts_at ? `${day(j.starts_at)} · ${time(j.starts_at)}` : <span className="text-mute">Not set</span>}</td>
+                    <td>{liveAssignment(j)?.full_name ?? <span className="text-mute">—</span>}</td>
+                    <td><StatusChip status={j.status} /></td>
+                    {money && <td className="num">{inr(j.agreed_amount)}</td>}
+                  </tr>
+                ))}
               </tbody>
             </table>
-          ) : <Empty>No jobs at this stage.</Empty>}
-        </div>
+          ) : (
+            <Empty icon={Clapperboard}>No jobs match.</Empty>
+          )}
+          {total > jobs.length && <p className="px-2 py-2 text-[13px] text-mute">Showing {jobs.length} of {total}. Narrow the search to see the rest.</p>}
+        </Panel>
       </Pane>
     </>
   );

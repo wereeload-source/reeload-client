@@ -1,10 +1,10 @@
-import { PageBar, Pane } from "@/components/page-bar";
-import { requireProfile } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { PageBar, Pane } from "@/components/page-bar";
+import { requirePage } from "@/lib/session";
 import { NewJobForm } from "./form";
 
 export default async function NewJob() {
-  const { me } = await requireProfile();
+  const { me } = await requirePage("jobs");
   if (me.role !== "sales" && me.role !== "admin") redirect("/jobs");
   return (
     <>

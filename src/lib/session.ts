@@ -1,8 +1,9 @@
+import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Profile } from "@/lib/types";
-
+import { canOpen, type NavKey } from "@/lib/nav";
 import { ACCESS_COOKIE, API_URL } from "@/lib/token";
+import type { Profile } from "@/lib/types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -17,6 +18,15 @@ export function messageOf(body: unknown, fallback: string): string {
   return typeof m === "string" && m ? m : fallback;
 }
 
+function parse(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = (await cookies()).get(ACCESS_COOKIE)?.value;
   let res: Response;
@@ -29,14 +39,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
   } catch {
     throw new ApiError(503, "Cannot reach the server. Try again in a moment.");
   }
   // The proxy renews tokens before pages run, so a 401 here means the sign-in is over (expired, signed out or disabled).
   if (res.status === 401 && token) redirect("/login");
-  const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : null;
+  const data = parse(await res.text());
   if (!res.ok) throw new ApiError(res.status, messageOf(data, `Request failed (${res.status})`));
   return data as T;
 }
@@ -71,4 +81,11 @@ export async function requireProfile(): Promise<{ me: Profile }> {
     if (e instanceof ApiError && (e.status === 401 || e.status === 403 || e.status === 404)) redirect("/login?disabled=1");
     throw e;
   }
+}
+
+/** Like requireProfile, but also sends people away from console pages their role does not use. */
+export async function requirePage(key: NavKey): Promise<{ me: Profile }> {
+  const { me } = await requireProfile();
+  if (!canOpen(me.role, key)) redirect("/");
+  return { me };
 }

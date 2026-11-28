@@ -1,35 +1,48 @@
-import { redirect } from "next/navigation";
-import { api, requireProfile } from "@/lib/session";
 import { PageBar, Pane } from "@/components/page-bar";
-import { Avatar, Chip } from "@/components/ui";
-import { ROLE_LABEL, type Profile } from "@/lib/types";
+import { Avatar, Chip, Panel, type Tone } from "@/components/ui";
+import { api, requirePage } from "@/lib/session";
+import { ROLE_LABEL, type Role, type UserRow } from "@/lib/types";
 import { NewUser } from "./new-user";
-import { ToggleUser } from "./toggle";
+import { ResetPassword, ToggleUser } from "./toggle";
+
+const ROLE_TONE: Record<Role, Tone> = { admin: "rec", sales: "blue", ops: "vio", accounts: "warn", reelmaker: "ok" };
 
 export default async function UsersPage() {
-  const { me } = await requireProfile();
-  if (me.role !== "admin") redirect("/");
-  const users = await api.get<(Profile & { kind: string | null; base_city: string | null })[]>("/users");
+  const { me } = await requirePage("users");
+  const users = await api.get<UserRow[]>("/users");
   return (
     <>
-      <PageBar title="Users" />
+      <PageBar title="Users"><NewUser /></PageBar>
       <Pane>
-        <NewUser />
-        <p className="text-[13px] text-mute">Disabled users cannot sign in. Give new users a temporary password and ask them to change it.</p>
-        <div className="card px-2 py-1.5">
+        <p className="text-[13px] text-mute">Disabled users cannot sign in. Passwords are stored only as secure hashes; nobody, including admins, can read them.</p>
+        <Panel flush>
           <table className="tbl">
             <thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Status</th><th /></tr></thead>
-            <tbody>{users.map((u) => (
-              <tr key={u.id}>
-                <td><div className="flex items-center gap-2.5"><Avatar name={u.full_name} /><div><b>{u.full_name}</b><div className="text-[12.5px] text-mute">{u.email}</div></div></div></td>
-                <td><Chip tone={u.role === "admin" ? "rec" : u.role === "sales" ? "blue" : u.role === "ops" ? "vio" : u.role === "accounts" ? "warn" : "ok"}>{ROLE_LABEL[u.role]}</Chip></td>
-                <td className="font-mono">{u.phone}</td>
-                <td>{u.active ? <Chip tone="ok">Active</Chip> : <Chip>Disabled</Chip>}</td>
-                <td className="num">{u.id !== me.id && <ToggleUser id={u.id} active={u.active} />}</td>
-              </tr>
-            ))}</tbody>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={u.full_name} />
+                      <div><b>{u.full_name}</b><div className="text-[12.5px] text-mute">{u.email}{u.base_city ? ` · ${u.base_city}` : ""}</div></div>
+                    </div>
+                  </td>
+                  <td><Chip tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Chip></td>
+                  <td className="font-mono">{u.phone}</td>
+                  <td>{u.active ? <Chip tone="ok">Active</Chip> : <Chip>Disabled</Chip>}</td>
+                  <td className="num">
+                    {u.id !== me.id && (
+                      <div className="flex justify-end gap-1.5">
+                        <ResetPassword id={u.id} name={u.full_name} />
+                        <ToggleUser id={u.id} name={u.full_name} active={u.active} />
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
-        </div>
+        </Panel>
       </Pane>
     </>
   );

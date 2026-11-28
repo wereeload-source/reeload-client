@@ -1,30 +1,39 @@
 "use server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { messageOf } from "@/lib/session";
-import { ACCESS_COOKIE, API_URL, REFRESH_COOKIE, cookieOptions, type TokenPair } from "@/lib/token";
+import { ACCESS_COOKIE, API_URL, REFRESH_COOKIE, cookieOptions, safeNext, type TokenPair } from "@/lib/token";
+
+/** The browser's address, so the API's per-address login limit counts people, not this server. */
+async function clientIp(): Promise<string | null> {
+  const h = await headers();
+  return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+}
 
 export async function signIn(_: unknown, form: FormData) {
+  const ip = await clientIp();
   let res: Response;
   try {
     res = await fetch(`${API_URL()}/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(ip ? { "X-Forwarded-For": ip } : {}) },
       body: JSON.stringify({ email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? "") }),
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
   } catch {
     return { error: "Cannot reach the server. Try again in a moment." };
   }
   const data = (await res.json().catch(() => null)) as Partial<TokenPair> | null;
   if (!res.ok || !data?.access_token || !data.refresh_token) {
-    return { error: res.status === 429 ? messageOf(data, "Too many tries. Wait a while.") : "Wrong email or password" };
+    if (res.status === 429) return { error: "Too many tries. Wait 15 minutes and try again." };
+    if (res.status === 400) return { error: "Enter a valid email and password" };
+    if (res.status >= 500) return { error: "The server had a problem. Try again in a moment." };
+    return { error: "Wrong email or password" };
   }
   const jar = await cookies();
   jar.set(ACCESS_COOKIE, data.access_token, cookieOptions());
   jar.set(REFRESH_COOKIE, data.refresh_token, cookieOptions());
-  const next = String(form.get("next") || "/");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+  redirect(safeNext(String(form.get("next") ?? "")));
 }
 
 /** Ends the sign-in on the server (the refresh token stops working), then clears the cookies. */
@@ -37,6 +46,7 @@ export async function signOut() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
       cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
     }).catch(() => undefined);
   }
   jar.delete(ACCESS_COOKIE);

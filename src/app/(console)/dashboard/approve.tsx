@@ -1,22 +1,14 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { Check, X } from "lucide-react";
+import { ActionButton } from "@/components/action-button";
+import { apiClient } from "@/lib/api-client";
 
 export function ApprovePriceChange({ id }: { id: string }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const decide = async (approve: boolean) => {
-    setBusy(true);
-    const { error } = await createClient().rpc("decide_price_change", { p_change: id, p_approve: approve });
-    setBusy(false);
-    if (error) alert(error.message);
-    router.refresh();
-  };
+  const decide = (approve: boolean) => () => apiClient.post(`/price-changes/${encodeURIComponent(id)}/decision`, { approve });
   return (
     <div className="flex gap-1.5">
-      <button className="btn" disabled={busy} onClick={() => decide(false)}>Reject</button>
-      <button className="btn btn-pri" disabled={busy} onClick={() => decide(true)}>Approve</button>
+      <ActionButton icon={X} variant="secondary" run={decide(false)} success="Rejected">Reject</ActionButton>
+      <ActionButton icon={Check} variant="primary" run={decide(true)} success="Approved">Approve</ActionButton>
     </div>
   );
 }

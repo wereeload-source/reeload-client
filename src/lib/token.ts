@@ -2,8 +2,8 @@
  * Sign-in tokens live in httpOnly cookies, so page scripts can never read them.
  * Safe to import from the proxy (no next/headers here).
  */
-export const ACCESS_COOKIE = "reelops_access";
-export const REFRESH_COOKIE = "reelops_refresh";
+export const ACCESS_COOKIE = "reeload_access";
+export const REFRESH_COOKIE = "reeload_refresh";
 
 export const API_URL = () => (process.env.API_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 
@@ -63,4 +63,14 @@ export function refreshSession(refreshToken: string): Promise<TokenPair | null> 
   })().finally(() => setTimeout(() => inFlight.delete(refreshToken), 10_000));
   inFlight.set(refreshToken, call);
   return call;
+}
+
+/**
+ * Where to go after signing in. Only same-site paths are allowed, so a crafted
+ * `/login?next=https://evil.example` link cannot bounce someone to another site.
+ */
+export function safeNext(next: string | null | undefined): string {
+  if (!next || typeof next !== "string") return "/";
+  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\") || /[\r\n\t]/.test(next)) return "/";
+  return next.startsWith("/login") ? "/" : next;
 }

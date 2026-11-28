@@ -1,8 +1,16 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 
-/* ReelOps theme, taken from the approved mockup ("editing-suite" look). */
+/* Reeload theme, taken from the approved mockup ("editing-suite" look). */
 :root {
   color-scheme: light dark;
+}
+
+/* Follow the theme the layout script picked, so our colours and HeroUI's always agree. */
+:root.light { color-scheme: light; }
+:root.dark { color-scheme: dark; }
+
+:root {
   --bg: light-dark(#e9e7e3, #0b0c0e);
   --paper: light-dark(#ffffff, #15171b);
   --sub: light-dark(#f6f7f9, #1c1f24);
@@ -19,6 +27,11 @@
   --blues: light-dark(#e8eeff, #18213d);
   --vio: light-dark(#6a3fc4, #b9a0f5);
   --vios: light-dark(#f0eafd, #261c3d);
+
+  /* HeroUI tokens mapped onto the Reeload palette, so its components match the rest of the app. */
+  --accent: #df3b2b;
+  --accent-foreground: #ffffff;
+  --focus: #df3b2b;
 }
 
 @theme inline {

@@ -1,47 +1,83 @@
-import { requireProfile } from "@/lib/supabase/server";
+import { AlarmClock, ClipboardCheck, ShieldCheck, Timer } from "lucide-react";
+import Link from "next/link";
 import { PageBar, Pane } from "@/components/page-bar";
-import { StatusChip, Empty } from "@/components/ui";
-import { day, hoursSince } from "@/lib/format";
-import type { Job } from "@/lib/types";
-import { ReviewActions } from "./actions";
+import { Chip, Empty, Panel, StatusChip } from "@/components/ui";
+import { day, time } from "@/lib/format";
+import { api, requirePage } from "@/lib/session";
+import type { CheckinPending, ExtraTimeRow, ReviewRow } from "@/lib/types";
+import { DecideExtraTime } from "@/components/decide-extra-time";
 
 export default async function ReviewPage() {
-  const { supabase, me } = await requireProfile();
-  const { data: jobs } = await supabase.from("jobs").select("*, clients(name)").in("status", ["reached", "uploaded", "released", "paid", "delivered"]).order("starts_at", { ascending: false });
-  const ids = (jobs ?? []).map((j) => j.id);
-  const { data: files } = ids.length
-    ? await supabase.from("uploads").select("job_id, kind, status").in("job_id", ids).eq("status", "complete")
-    : { data: [] };
-  const count = (id: string, kind: string) => (files ?? []).filter((f) => f.job_id === id && f.kind === kind).length;
+  const { me } = await requirePage("review");
+  const [rows, checkins, extra] = await Promise.all([
+    api.get<ReviewRow[]>("/review"),
+    api.get<CheckinPending[]>("/checkins/pending"),
+    api.get<ExtraTimeRow[]>("/extra-time?decision=pending"),
+  ]);
 
   return (
     <>
       <PageBar title="Review & delivery" />
       <Pane>
-        <div className="card px-2 py-1.5">
-          {(jobs ?? []).length ? (
+        {checkins.length > 0 && (
+          <Panel title="Waiting for a check-in code" icon={ShieldCheck} flush>
             <table className="tbl">
-              <thead><tr><th>Job</th><th>Shot</th><th>Status</th><th className="num">Raw</th><th className="num">Edited</th><th>Files due</th><th /></tr></thead>
               <tbody>
-                {((jobs ?? []) as Job[]).map((j) => {
-                  const h = hoursSince(j.starts_at);
-                  const raw = count(j.id, "raw"), edited = count(j.id, "edited");
-                  const overdue = (raw === 0 && h > 24) || (edited === 0 && h > 72);
-                  return (
-                    <tr key={j.id}>
-                      <td><b>{j.clients?.name}</b><div className="text-[13px] text-mute">{j.code}</div></td>
-                      <td>{day(j.starts_at)}</td>
-                      <td><StatusChip status={j.status} /></td>
-                      <td className="num">{raw}</td><td className="num">{edited}</td>
-                      <td>{overdue && ["reached", "uploaded"].includes(j.status) ? <span className="text-[13px] font-semibold text-rec">Overdue</span> : <span className="text-mute">On time</span>}</td>
-                      <td className="num"><ReviewActions jobId={j.id} status={j.status} isAdmin={me.role === "admin"} /></td>
-                    </tr>
-                  );
-                })}
+                {checkins.map((c) => (
+                  <tr key={c.checkin_id}>
+                    <td><Link className="font-semibold text-rec hover:underline" href={`/jobs/${c.job_id}`}>{c.code}</Link></td>
+                    <td>{c.reelmaker}<div className="text-[13px] text-mute">{c.city} · asked {time(c.requested_at)} · {c.otp_sends} codes sent</div></td>
+                    <td className="num">{c.release_in_seconds > 0 ? <span className="text-mute">Ops can release in {Math.ceil(c.release_in_seconds / 60)} min</span> : <Chip tone="warn">Ops can release now</Chip>}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-          ) : <Empty>No work waiting for review.</Empty>}
-        </div>
+          </Panel>
+        )}
+
+        <Panel title="Shoots with work to check" icon={ClipboardCheck} flush>
+          {rows.length ? (
+            <table className="tbl">
+              <thead><tr><th>Job</th><th>Shot</th><th>Reelmaker</th><th>Status</th><th className="num">Raw</th><th className="num">Edited</th><th>Due</th></tr></thead>
+              <tbody>
+                {rows.map((j) => (
+                  <tr key={j.id}>
+                    <td><Link className="font-semibold hover:underline" href={`/jobs/${j.id}`}>{j.client_name}</Link><div className="text-[13px] text-mute">{j.code} · {j.city}</div></td>
+                    <td>{day(j.starts_at)}</td>
+                    <td>{j.reelmaker ?? <span className="text-mute">—</span>}</td>
+                    <td><StatusChip status={j.status} /></td>
+                    <td className="num">{j.raw_files}</td>
+                    <td className="num">{j.edited_files}</td>
+                    <td className="whitespace-nowrap">
+                      {j.raw_overdue || j.edited_overdue ? (
+                        <span className="flex items-center gap-1 text-[13px] font-semibold text-rec"><AlarmClock aria-hidden className="size-3.5" />{j.raw_overdue ? "Raw overdue" : "Edited overdue"}</span>
+                      ) : (
+                        <span className="text-[13px] text-mute">{j.raw_files ? `Edited by ${day(j.edited_due)}` : `Raw by ${day(j.raw_due)} ${time(j.raw_due)}`}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <Empty icon={ClipboardCheck}>No work waiting for review.</Empty>}
+        </Panel>
+
+        {extra.length > 0 && (
+          <Panel title="Extra time waiting for Sales" icon={Timer} flush>
+            <table className="tbl">
+              <tbody>
+                {extra.map((e) => (
+                  <tr key={e.id}>
+                    <td><Link className="hover:underline" href={`/jobs/${e.job_id}`}>{e.code}</Link> · {e.client_name}</td>
+                    <td>{e.minutes} min{e.note ? ` · ${e.note}` : ""}</td>
+                    <td className="text-mute">by {e.added_by_name}</td>
+                    <td className="num">{me.role === "admin" && <DecideExtraTime id={e.id} />}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        )}
       </Pane>
     </>
   );

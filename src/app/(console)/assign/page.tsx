@@ -1,29 +1,62 @@
-import { requireProfile } from "@/lib/supabase/server";
+import { CalendarOff, Hourglass } from "lucide-react";
 import { PageBar, Pane } from "@/components/page-bar";
-import { Chip } from "@/components/ui";
-import { hoursSince } from "@/lib/format";
-import type { Job } from "@/lib/types";
+import { Chip, Empty, Panel } from "@/components/ui";
+import { day, time } from "@/lib/format";
+import { api, requirePage } from "@/lib/session";
+import type { AssignQueue, LeaveRow, Reelmaker } from "@/lib/types";
 import { AssignBoard } from "./board";
+import { AddLeave, RemoveLeave } from "./leave";
 
 export default async function AssignPage() {
-  const { supabase } = await requireProfile();
-  const [{ data: jobs }, { data: rms }, { data: booked }, { data: leave }] = await Promise.all([
-    supabase.from("jobs").select("*, clients(name)").eq("status", "confirmed").order("confirmed_at"),
-    supabase.from("profiles").select("id, full_name, reelmakers(kind, base_city)").eq("role", "reelmaker").eq("active", true).order("full_name"),
-    supabase.from("assignments").select("reelmaker_id, time_range").in("status", ["pending", "accepted"]),
-    supabase.from("availability").select("reelmaker_id, time_range"),
+  await requirePage("assign");
+  const [queue, reelmakers, leave] = await Promise.all([
+    api.get<AssignQueue>("/assign/queue"),
+    api.get<Reelmaker[]>("/reelmakers"),
+    api.get<LeaveRow[]>("/leave"),
   ]);
-  const late = ((jobs ?? []) as Job[]).filter((j) => hoursSince(j.confirmed_at) > 48).length;
+  const nameOf = (id: string) => reelmakers.find((r) => r.id === id)?.full_name ?? "Reelmaker";
+
   return (
     <>
-      <PageBar title="Assign shoots">{late > 0 && <Chip tone="rec">{late} over 48 hours</Chip>}</PageBar>
+      <PageBar title="Assign shoots">
+        {queue.flagged > 0 && <Chip tone="rec">{queue.flagged} starting soon</Chip>}
+        <AddLeave reelmakers={reelmakers} />
+      </PageBar>
       <Pane>
-        <AssignBoard
-          jobs={(jobs ?? []) as Job[]}
-          reelmakers={(rms ?? []).map((r) => ({ id: r.id, name: r.full_name, kind: (r.reelmakers as unknown as { kind: string } | null)?.kind ?? "" }))}
-          booked={booked ?? []}
-          leave={leave ?? []}
-        />
+        <AssignBoard jobs={queue.unassigned} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel title="Waiting for the reelmaker to reply" icon={Hourglass} flush>
+            {queue.awaiting_reply.length ? (
+              <table className="tbl">
+                <tbody>
+                  {queue.awaiting_reply.map((w) => (
+                    <tr key={w.assignment_id}>
+                      <td className="text-mute">{w.code}</td>
+                      <td><b>{w.client_name}</b><div className="text-[13px] text-mute">{day(w.starts_at)} · {time(w.starts_at)}</div></td>
+                      <td>{w.reelmaker}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <Empty>No one to chase.</Empty>}
+          </Panel>
+          <Panel title="Upcoming leave" icon={CalendarOff} flush>
+            {leave.length ? (
+              <table className="tbl">
+                <tbody>
+                  {leave.map((l) => (
+                    <tr key={l.id}>
+                      <td>{l.reelmaker_name ?? nameOf(l.reelmaker_id)}</td>
+                      <td>{day(l.starts_at)} – {day(new Date(new Date(l.ends_at).getTime() - 1).toISOString())}</td>
+                      <td className="text-mute">{l.note}</td>
+                      <td className="num"><RemoveLeave id={l.id} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <Empty>No leave booked.</Empty>}
+          </Panel>
+        </div>
       </Pane>
     </>
   );

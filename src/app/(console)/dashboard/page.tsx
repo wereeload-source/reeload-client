@@ -1,115 +1,83 @@
-import { requireProfile } from "@/lib/supabase/server";
+import { AlertTriangle, BadgeIndianRupee, CalendarCheck, ClipboardList, History, PhoneCall, Wallet } from "lucide-react";
+import Link from "next/link";
 import { PageBar, Pane } from "@/components/page-bar";
-import { Avatar, Kpi, StatusChip, Empty } from "@/components/ui";
-import { hoursSince, inr, isToday, time } from "@/lib/format";
-import { JOB_SELECT, PIPELINE, liveAssignment as live, type Job } from "@/lib/types";
+import { Empty, Kpi, Panel } from "@/components/ui";
+import { inr, time } from "@/lib/format";
+import { api, requirePage } from "@/lib/session";
+import { PIPELINE, type Dashboard, type PriceChange } from "@/lib/types";
 import { ApprovePriceChange } from "./approve";
 
-export default async function Dashboard() {
-  const { supabase } = await requireProfile();
-  const [{ data: jobs }, { data: money }, { data: pending }, { data: hours }, { data: calls }, { data: audit }, { data: people }] = await Promise.all([
-    supabase.from("jobs").select(JOB_SELECT).order("starts_at"),
-    supabase.from("jobs_accounts").select("id, received, balance"),
-    supabase.from("price_changes").select("id, delta, reason, jobs(code, clients(name))").eq("status", "pending"),
-    supabase.from("reelmaker_hours").select("reelmaker_id, booked_hours, extra_hours"),
-    supabase.from("contact_counts_today").select("*"),
-    supabase.from("audit_log").select("id, at, action, entity, actor_id").order("at", { ascending: false }).limit(6),
-    supabase.from("profiles").select("id, full_name"),
+export default async function DashboardPage() {
+  await requirePage("dashboard");
+  const [d, pending] = await Promise.all([
+    api.get<Dashboard>("/dashboard"),
+    api.get<PriceChange[]>("/price-changes?status=pending"),
   ]);
-  const nameOf = (id: string | null) => (people ?? []).find((p) => p.id === id)?.full_name;
-
-  const all = (jobs ?? []) as Job[];
-  const today = all.filter((j) => isToday(j.starts_at));
-  const unassigned = all.filter((j) => j.status === "confirmed");
-  const received = (money ?? []).reduce((s, m) => s + Number(m.received ?? 0), 0);
-  const outstanding = (money ?? []).reduce((s, m) => s + Math.max(0, Number(m.balance ?? 0)), 0);
-  const maxH = Math.max(1, ...(hours ?? []).map((h) => Number(h.booked_hours) + Number(h.extra_hours)));
+  const a = d.needs_attention;
 
   return (
     <>
       <PageBar title="Dashboard" />
       <Pane>
         <div className="kpis">
-          <Kpi label="Shoots today" value={today.length} note={`${today.filter((j) => j.status === "reached").length} on site now`} />
-          <Kpi label="Unassigned" value={unassigned.length} alert={unassigned.length > 0}
-            note={`${unassigned.filter((j) => hoursSince(j.confirmed_at) > 48).length} waiting over 48 hours`} />
-          <Kpi label="Collected" value={inr(received)} />
-          <Kpi label="Outstanding" value={inr(outstanding)} note={`across ${(money ?? []).filter((m) => Number(m.balance) > 0).length} jobs`} />
+          <Kpi icon={CalendarCheck} label="Shoots today" value={d.today.shoots} note={`${d.today.reached} checked in`} />
+          <Kpi icon={AlertTriangle} label="Unassigned" value={a.unassigned.total} alert={a.unassigned.flagged > 0} note={`${a.unassigned.flagged} starting soon`} />
+          <Kpi icon={Wallet} label="Received this month" value={inr(d.money.received_this_month)} />
+          <Kpi icon={BadgeIndianRupee} label="Outstanding" value={inr(d.money.outstanding)} note={`across ${d.money.jobs_owing} jobs`} />
         </div>
 
-        <div className="card">
-          <h3>Jobs by stage</h3>
-          <div className="grid grid-cols-5 gap-1 md:grid-cols-10">
+        <Panel title="Jobs by stage">
+          <div className="grid grid-cols-4 gap-1 md:grid-cols-11">
             {PIPELINE.map((s) => {
-              const n = all.filter((j) => j.status === s).length;
+              const n = d.jobs_by_status[s] ?? 0;
               const hot = s === "confirmed" && n > 0;
               return (
-                <div key={s} className={`rounded-lg px-2 pb-1.5 pt-2 text-xs capitalize ${hot ? "bg-recs text-rec" : "bg-sub text-mute"}`}>
+                <Link key={s} href={`/jobs?s=${s}`} className={`rounded-lg px-2 pb-1.5 pt-2 text-xs capitalize hover:outline hover:outline-line ${hot ? "bg-recs text-rec" : "bg-sub text-mute"}`}>
                   <b className={`block font-display text-lg ${hot ? "text-rec" : "text-ink"}`}>{n}</b>{s}
-                </div>
+                </Link>
               );
             })}
           </div>
-        </div>
+        </Panel>
 
-        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-          <div className="card">
-            <h3>Today&apos;s shoots</h3>
-            {today.length ? today.map((j) => (
-              <div key={j.id} className="flex items-center gap-3 border-b border-line px-1 py-2.5 last:border-0">
-                <span className="w-14 flex-none font-mono text-[13px]">{time(j.starts_at)}</span>
-                {live(j)?.profiles && <Avatar name={live(j)!.profiles!.full_name} />}
-                <div className="flex-1"><b>{j.clients?.name}</b><div className="text-[13px] text-mute">{j.city} · {live(j)?.profiles?.full_name ?? "Unassigned"}</div></div>
-                <StatusChip status={j.status} />
+        <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <Panel title="Needs attention" icon={ClipboardList}>
+            <ul className="grid gap-1.5 text-sm">
+              <li><Link className="hover:underline" href="/assign">{a.unassigned.total} jobs waiting for a reelmaker</Link></li>
+              <li><Link className="hover:underline" href="/review">{a.uploads_overdue} shoots with files overdue</Link></li>
+              <li>{a.checkins_waiting} check-ins waiting for a code</li>
+              <li>{a.approvals.extra_time} extra-time decisions pending</li>
+            </ul>
+          </Panel>
+          <Panel title="Waiting for your approval" aside={`${pending.length}`}>
+            {pending.length ? pending.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 border-b border-line py-2 last:border-0">
+                <div className="flex-1">
+                  <b>{p.code} · {p.reason}</b>
+                  <div className="text-[13px] text-mute">{Number(p.delta) > 0 ? "+" : ""}{inr(p.delta)} · {p.client_name} · asked by {p.requested_by_name}</div>
+                </div>
+                <ApprovePriceChange id={p.id} />
               </div>
-            )) : <Empty>No shoots today.</Empty>}
-          </div>
-          <div className="grid content-start gap-4">
-            <div className="card">
-              <h3>Waiting for your approval</h3>
-              {(pending ?? []).length ? (pending ?? []).map((p) => {
-                const job = p.jobs as unknown as { code: string; clients: { name: string } } | null;
-                return (
-                  <div key={p.id} className="flex items-center gap-3 py-2">
-                    <div className="flex-1"><b>{job?.code} {p.reason}</b><div className="text-[13px] text-mute">+{inr(p.delta)} · {job?.clients?.name}</div></div>
-                    <ApprovePriceChange id={p.id} />
-                  </div>
-                );
-              }) : <div className="text-mute">Nothing to approve.</div>}
-            </div>
-            <div className="card">
-              <h3>Hours this month</h3>
-              {(hours ?? []).map((h) => {
-                const total = Number(h.booked_hours) + Number(h.extra_hours);
-                const name = nameOf(h.reelmaker_id) ?? "";
-                return (
-                  <div key={h.reelmaker_id} className="my-[7px] grid grid-cols-[84px_minmax(0,1fr)_48px] items-center gap-2.5">
-                    <span>{name.split(" ")[0]}</span>
-                    <span className="h-2.5 overflow-hidden rounded-full bg-sub"><i className="block h-full rounded-full bg-ink" style={{ width: `${(total / maxH) * 100}%` }} /></span>
-                    <span className="num">{total}h</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+            )) : <Empty>Nothing to approve.</Empty>}
+          </Panel>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="card">
-            <h3>Sales calls today</h3>
-            <table className="tbl"><thead><tr><th>Salesperson</th><th className="num">Spoken</th><th className="num">Approved</th><th className="num">Rejected</th></tr></thead>
-              <tbody>{(calls ?? []).map((c) => <tr key={c.salesperson_id}><td>{c.full_name}</td><td className="num">{c.spoken}</td><td className="num">{c.approved}</td><td className="num">{c.rejected}</td></tr>)}</tbody>
-            </table>
-          </div>
-          <div className="card">
-            <h3>Audit log <small className="ml-auto text-[13px] font-medium text-mute">Cannot be edited</small></h3>
-            {(audit ?? []).map((a) => (
-              <div key={a.id} className="flex gap-3 border-b border-line py-2 text-sm last:border-0">
-                <span className="w-[72px] flex-none font-mono text-[12.5px] text-mute">{time(a.at)}</span>
-                <div><b>{nameOf(a.actor_id) ?? "System"}</b> {a.action} {a.entity}</div>
+          <Panel title="Sales calls today" icon={PhoneCall}>
+            <div className="grid grid-cols-4 text-center text-sm">
+              {([["Spoken", d.sales_today.spoken], ["Approved", d.sales_today.approved], ["Rejected", d.sales_today.rejected], ["Follow-ups", d.sales_today.follow_ups]] as const).map(([l, v]) => (
+                <div key={l}><b className="block font-display text-2xl">{v}</b><span className="text-mute">{l}</span></div>
+              ))}
+            </div>
+          </Panel>
+          <Panel title="Recent activity" icon={History} aside="Cannot be edited">
+            {d.recent_activity.length ? d.recent_activity.map((e) => (
+              <div key={e.id} className="flex gap-3 border-b border-line py-2 text-sm last:border-0">
+                <span className="w-[52px] flex-none font-mono text-[12.5px] text-mute">{time(e.at)}</span>
+                <div><b>{e.actor_name ?? "System"}</b> {e.action.replace(/_/g, " ")} {e.entity.replace(/_/g, " ")}</div>
               </div>
-            ))}
-          </div>
+            )) : <Empty>No activity yet.</Empty>}
+          </Panel>
         </div>
       </Pane>
     </>
