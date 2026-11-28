@@ -1,61 +1,79 @@
 # reeload-client
 
-Frontend for **ReelOps**: the office web console (Admin, Sales, Operations, Accounts) and the reelmaker phone app, in one Next.js app. Styled after the approved mockup.
+Frontend for **Reeload**: the office web console (Admin, Sales, Operations, Accounts) and the reelmaker phone app, in one Next.js app.
 
-Backend (database, permissions, Edge Functions): [`reeload-server`](https://github.com/wereeload-source/reeload-server).
+Backend (NestJS API on Postgres): [`reeload-server`](https://github.com/wereeload-source/reeload-server). This app never talks to the database; every read and write goes through the API, which decides what each role may do.
 
 ## Stack
 
-Next.js 16 (App Router, React 19) · Tailwind CSS 4 · Supabase (`@supabase/ssr`) · direct-to-R2 resumable uploads · fonts Geist and Funnel Display.
+Next.js 16 (App Router, React 19) · [HeroUI v3](https://heroui.com) components for every control (buttons, fields, tables, cards, chips, tabs, dialogs, toasts) · [Lucide](https://lucide.dev) icons · Tailwind CSS 4 · Vitest + Testing Library · direct-to-R2 resumable uploads.
+
+The look follows the approved UI mockups ("ReelOps – UI Mockups"): a light console on a grey page, a near-black menu (sidebar for Admin, top bar for Sales, Operations and Accounts), white cards, one red-orange accent (`#C93A06`), Space Grotesk headings, Inter text and JetBrains Mono for times, codes and money. Colours live in `src/app/globals.css` and are mapped onto HeroUI's theme tokens there.
+
+## Getting started
+
+```bash
+pnpm install
+cp .env.example .env.local     # API_URL = the reeload-server API (http://localhost:4000)
+pnpm dev                       # http://localhost:3000
+```
+
+Start the API first (see reeload-server's README), then sign in with a seeded account such as `admin@reeload.test` or `reelmaker@reeload.test` (password `Reeload#2025`, local development only). Open the reelmaker app on a phone or a narrow window.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm dev` / `pnpm build` / `pnpm start` | Develop, build for production, run the build |
+| `pnpm lint` / `pnpm typecheck` | ESLint (Next rules) / TypeScript |
+| `pnpm test` | Unit and component tests (Vitest, jsdom, Testing Library) |
 
 ## Screens
 
 | Path | Who | What |
 | --- | --- | --- |
 | `/login` | everyone | email + password |
-| `/dashboard` | Admin | today's shoots, unassigned, collected/outstanding, jobs by stage, approvals, hours, sales calls, audit log |
-| `/jobs`, `/jobs/new` | Admin, Sales, Accounts | job list with filters; new job with advance + consent (confirm only with an advance) |
-| `/assign` | Admin, Ops | unassigned queue with 48-hour flags, free / overlapping / on-leave reelmakers, assign |
-| `/calendar` | office | next two weeks by day |
-| `/review` | Admin, Ops | files per job, overdue flags, release work, create 7-day client link |
-| `/payments` | Admin, Accounts | ledger: total, advance, received, balance; record payment |
-| `/contacts` | Admin, Sales | today's call log and counts |
-| `/team`, `/users`, `/settings` | Admin (team: Ops, Accounts) | reelmaker hours, enable/disable users, retention |
-| `/m` | Reelmaker | my shoots, accept/decline requests |
-| `/m/shoots/[id]` | Reelmaker | brief, map, **Reached → WhatsApp OTP → two live photos → upload from Photos** (resumable) |
-| `/m/hours` | Reelmaker | own hours this month |
+| `/dashboard` | Admin | today, unassigned, money, jobs by stage, price changes to approve, sales calls, activity |
+| `/jobs`, `/jobs/new`, `/jobs/[id]` | Admin, Sales, Ops | list and search; new job (confirm only with advance + consent); job page with advance, confirm, reschedule, price change, release, send back, extra time, check-in release, files, client links |
+| `/assign` | Admin, Ops | unassigned queue, free / booked / on-leave reelmakers, assign, leave |
+| `/calendar` | Admin, Sales, Ops | two weeks at a time |
+| `/review` | Admin, Ops | check-ins waiting, work to check with due dates, extra time waiting |
+| `/payments` | Admin, Sales, Accounts | ledger, record payment (Admin, Accounts), CSV export |
+| `/contacts` | Admin, Sales | call log by day |
+| `/team` | Admin, Ops | reelmaker hours per month |
+| `/users`, `/settings` | Admin | create, disable, reset password; retention, links, deadlines |
+| `/m`, `/m/shoots/[id]`, `/m/hours` | Reelmaker | requests (accept / decline), **Reached → WhatsApp code → two live photos → upload from Photos** (resumable), hours |
 | `/d/[token]` | client, no login | download page for a 7-day link |
 
-Which pages each role sees is in `src/lib/types.ts` (`ROLE_NAV`). The API enforces the real permissions per role; the nav only hides what a role can't use.
-
-## Getting started
-
-```bash
-pnpm install
-cp .env.example .env.local     # API_URL of reeload-server's api (http://localhost:4000)
-pnpm dev                       # http://localhost:3000
-```
-
-Sign in with a seed user from reeload-server, e.g. `kavya@reelops.local` / `reelops123` (Admin) or `arjun@reelops.local` (Reelmaker; open on a phone or narrow window).
+The menu per role is in `src/lib/nav.ts`. It only hides what a role cannot use: the API enforces the real permissions.
 
 ## Layout
 
 ```
 src/
-  proxy.ts                    sends visitors without a live login token to /login
-  lib/session.ts              server-side API calls with the httpOnly token cookie; requireProfile()
-  lib/api-client.ts           browser calls through /api/proxy (the token never reaches page scripts)
-  app/(console)/              office console: sidebar layout + one folder per page
-  app/m/                      reelmaker phone app
-  app/d/[token]/              public download page
-  lib/supabase/               browser + server clients
-  lib/uploader.ts             multipart upload to R2 via presigned parts; resumes by asking the server which parts arrived
-  lib/functions.ts            calls Supabase Edge Functions
-  components/                 chips, avatars, KPI tiles, page bar
+  proxy.ts                     renews the 15-minute access token before pages run; sends signed-out visitors to /login
+  app/
+    (console)/                 office console: sidebar layout + one folder per page
+    m/                         reelmaker phone app
+    d/[token]/                 public download page
+    login/                     sign-in page and sign-in / sign-out server actions
+    api/proxy/[...path]/       browser → API bridge that adds the token from the httpOnly cookie
+  components/                  shared UI on HeroUI: fields, DataTable, FilterBar, FormDialog, ActionButton, chips, cards
+  lib/
+    session.ts                 server-side API calls (pages, server actions); requireProfile / requirePage
+    api-client.ts              browser calls through /api/proxy
+    token.ts                   cookie names, expiry check, single-flight refresh, safe redirects
+    uploader.ts                multipart upload to R2; resumes by asking the API which parts arrived
+    types.ts, nav.ts, format.ts, job-form.ts
+  test/setup.ts                Testing Library + a recorded Next router
 ```
 
-## Notes
+## Security
 
-- **Uploads:** the spec named Uppy; Uppy 6's S3 plugin signs every S3 call in the browser and keeps resume state only on the device. `lib/uploader.ts` keeps the multipart ID on the server instead, so a reelmaker who closes the page can pick the same file again and continue. It also keeps the screen awake while uploading.
-- **Live photos** use `getUserMedia` (front camera, then back). The file picker for uploads has no `capture` attribute, so phones offer Photos / gallery.
-- **Still to build:** day timeline calendar (one lane per reelmaker), extra-time entry, leave management, invite users, receipts, in-app notifications list.
+- Sign-in tokens live only in **httpOnly, SameSite=Lax** cookies (`Secure` in production); page scripts never see them.
+- `/api/proxy` forwards to `API_URL` only, refuses odd paths, cross-site writes and bodies over 1 MB, and never passes upstream cookies back.
+- After sign-in the app only redirects to its own paths (`safeNext`), so a crafted `?next=` link cannot send people elsewhere.
+- Client download pages are `noindex` and send no Referer.
+- Passwords are typed into the form and sent to the API, which hashes them. This app never stores them.
+
+## MCP
+
+`.mcp.json` registers the HeroUI MCP server (`@heroui/react-mcp`), so Claude Code and other MCP clients can look up HeroUI v3 components while working here. Restart Claude Code in this folder and run `/mcp` to confirm it is connected.

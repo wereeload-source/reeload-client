@@ -1,43 +1,64 @@
+import { Card } from "@heroui/react";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { requireProfile } from "@/lib/supabase/server";
-import { day, time } from "@/lib/format";
-import { ShootFlow } from "./flow";
+import { isToday, longDay, window_ } from "@/lib/format";
+import { ApiError, api, requireProfile } from "@/lib/session";
+import type { CheckinState, Shoot, UploadRow } from "@/lib/types";
+import { MHeader, MMain } from "../../header";
+import { DropOut, Respond } from "../../respond";
+import { ShootFlow, type Stage } from "./flow";
+
+const STAGE: Record<CheckinState["step"], Stage> = { not_started: "start", code_sent: "otp", photos: "photos", done: "upload" };
 
 export default async function ShootPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { supabase, me } = await requireProfile();
-  const [{ data: job }, { data: checkin }, { data: uploads }] = await Promise.all([
-    supabase.from("jobs").select("*, clients(name)").eq("id", id).single(),
-    supabase.from("checkins").select("verified_at, completed_at, method").eq("job_id", id).eq("reelmaker_id", me.id).maybeSingle(),
-    supabase.from("uploads").select("id, kind, file_name, size_bytes, status").eq("job_id", id).neq("kind", "proof").order("created_at"),
-  ]);
-  if (!job) notFound();
-  const end = job.starts_at ? new Date(new Date(job.starts_at).getTime() + job.duration_minutes * 60_000).toISOString() : null;
+  await requireProfile();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+
+  const shoot = await api.get<Shoot>(`/me/shoots/${id}`).catch((e) => {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 400 || e.status === 403)) notFound();
+    throw e;
+  });
+  const accepted = shoot.assignment_status === "accepted";
+  const [checkin, uploads] = accepted
+    ? await Promise.all([api.get<CheckinState>(`/me/shoots/${id}/checkin`), api.get<UploadRow[]>(`/jobs/${id}/uploads`)])
+    : [null, [] as UploadRow[]];
+  const mapHref = shoot.maps_url ?? (shoot.address ? `https://maps.google.com/?q=${encodeURIComponent(`${shoot.address}, ${shoot.city}`)}` : null);
+  const when = `${isToday(shoot.starts_at) ? "Today" : longDay(shoot.starts_at)} · ${window_(shoot.starts_at, shoot.duration_minutes)}`;
+
+  if (!accepted || !checkin) {
+    return (
+      <>
+        <MHeader title={shoot.client_name} subtitle="New request" back="/m" />
+        <MMain>
+          <Card className="gap-3 p-4">
+            <div className="font-mono text-[13px]">{when}</div>
+            <div className="text-sm text-mute2">{shoot.address ? `${shoot.address}, ${shoot.city}` : shoot.city}</div>
+            {shoot.brief && <div className="rounded-[10px] bg-sub p-3 text-sm"><strong>Brief.</strong> {shoot.brief}</div>}
+            {shoot.assignment_status === "pending" ? <Respond jobId={id} /> : <p className="m-0 text-sm text-mute">This shoot is no longer yours.</p>}
+          </Card>
+        </MMain>
+      </>
+    );
+  }
 
   return (
-    <>
-      <div className="flex items-center gap-2.5 py-2">
-        <Link href="/m" aria-label="Back" className="grid h-9 w-9 place-items-center rounded-full bg-sub">‹</Link>
-        <h2 className="font-display text-xl font-bold tracking-tight">{job.clients?.name}</h2>
-      </div>
-      <div className="mcard">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 text-sm">
-          <dt className="text-mute">When</dt><dd className="font-medium">{day(job.starts_at)}, {time(job.starts_at)} – {time(end)}</dd>
-          <dt className="text-mute">Where</dt><dd className="font-medium">{job.address ?? job.city}</dd>
-          {job.onsite_contact_name && <><dt className="text-mute">On site</dt><dd className="font-medium">{job.onsite_contact_name} · {job.onsite_contact_phone}</dd></>}
-          <dt className="text-mute">Job</dt><dd className="font-medium">{job.code}</dd>
-        </dl>
-        {(job.maps_url || job.address) && (
-          <a href={job.maps_url ?? `https://maps.google.com/?q=${encodeURIComponent(job.address)}`} target="_blank" rel="noopener" className="mbtn mbtn-ghost mt-3 min-h-11">Open in Google Maps</a>
-        )}
-      </div>
-      <div className="mcard"><b>Brief</b><p className="mt-1.5 text-sm">{job.brief}</p></div>
-      <ShootFlow
-        jobId={job.id}
-        stage={checkin?.completed_at ? "upload" : checkin?.verified_at ? "photos" : "start"}
-        files={uploads ?? []}
-      />
-    </>
+    <ShootFlow
+      jobId={id}
+      shoot={{
+        client: shoot.client_name,
+        code: shoot.code,
+        when,
+        address: shoot.address ? `${shoot.address}, ${shoot.city}` : shoot.city,
+        mapHref,
+        contactName: shoot.onsite_contact_name,
+        contactPhone: shoot.onsite_contact_phone,
+        brief: shoot.brief,
+      }}
+      stage={STAGE[checkin.step]}
+      sendsLeft={checkin.sends_left}
+      resendIn={checkin.resend_in_seconds}
+      files={uploads}
+      dropOut={checkin.step === "not_started" ? <DropOut jobId={id} /> : undefined}
+    />
   );
 }

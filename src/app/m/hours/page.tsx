@@ -1,29 +1,43 @@
-import { requireProfile } from "@/lib/supabase/server";
-import { day } from "@/lib/format";
+import { Card } from "@heroui/react";
+import { Cell, DataTable, Row } from "@/components/data-table";
+import { day, hours, istDate } from "@/lib/format";
+import { api, requireProfile } from "@/lib/session";
+import type { HoursRow, Shoot } from "@/lib/types";
+import { MHeader, MMain } from "../header";
 
 export default async function MyHours() {
-  const { supabase, me } = await requireProfile();
-  const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
-  const [{ data: sum }, { data: shoots }] = await Promise.all([
-    supabase.from("reelmaker_hours").select("*").eq("reelmaker_id", me.id).eq("month", month.toISOString().slice(0, 10)).maybeSingle(),
-    supabase.from("assignments").select("id, time_range, jobs(starts_at, duration_minutes, clients(name))")
-      .eq("reelmaker_id", me.id).eq("status", "accepted").order("created_at", { ascending: false }).limit(20),
+  await requireProfile();
+  const month = istDate().slice(0, 7);
+  const [sum, past] = await Promise.all([
+    api.get<{ month: string; items: HoursRow[] }>(`/hours?month=${month}`),
+    api.get<Shoot[]>("/me/shoots?when=past"),
   ]);
-  const total = sum ? Number(sum.booked_hours) + Number(sum.extra_hours) : 0;
-  type Row = { id: string; jobs: { starts_at: string; duration_minutes: number; clients: { name: string } | null } };
+  const h = sum.items[0];
+  const thisMonth = past.filter((s) => s.assignment_status === "accepted" && s.starts_at && istDate(new Date(s.starts_at)).startsWith(month));
+  const monthName = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "long", year: "numeric" });
+
   return (
     <>
-      <h2 className="py-2 font-display text-[26px] font-bold tracking-tight">My hours</h2>
-      <div className="mcard bg-[radial-gradient(120%_90%_at_100%_0%,#3a1310_0%,#121417_55%)] text-white">
-        <span className="text-[13px] text-[#a6acb6]">This month</span>
-        <div className="font-display text-[44px] font-extrabold">{total}h</div>
-        <div className="text-sm text-[#a6acb6]">{sum?.shoots ?? 0} shoots · includes {sum?.extra_hours ?? 0}h extra time</div>
-      </div>
-      {((shoots ?? []) as unknown as Row[]).map((s) => (
-        <div key={s.id} className="mcard flex items-center gap-2.5 px-3.5 py-3">
-          <b className="w-[60px]">{day(s.jobs.starts_at)}</b><span className="flex-1">{s.jobs.clients?.name}</span><span className="font-semibold">{s.jobs.duration_minutes / 60}h</span>
-        </div>
-      ))}
+      <MHeader title="My hours" subtitle={monthName} back="/m" />
+      <MMain>
+        <Card className="gap-1 p-4">
+          <div className="text-[13px] text-mute">This month</div>
+          <div className="font-display text-[34px] font-bold leading-none">{h?.total_hours ?? 0} h</div>
+          <div className="text-[13px] text-mute2">{h?.shoots ?? 0} shoots · includes {h?.extra_hours ?? 0} h extra time</div>
+        </Card>
+        <Card className="p-4">
+          <DataTable label="Shoots this month" minWidth={280} isEmpty={!thisMonth.length} empty="No shoots done this month yet." columns={[{ label: "Day" }, { label: "Client" }, { label: "Hours", align: "end" }]}>
+            {thisMonth.map((s) => (
+              <Row key={s.job_id}>
+                <Cell className="font-mono text-[13px]">{day(s.starts_at)}</Cell>
+                <Cell>{s.client_name}</Cell>
+                <Cell className="text-right font-mono">{hours((s.duration_minutes ?? 0) + (s.extra_minutes ?? 0))}</Cell>
+              </Row>
+            ))}
+          </DataTable>
+        </Card>
+        <p className="m-0 px-1 text-xs text-mute">Booked time plus extra time. Pay is worked out outside the app.</p>
+      </MMain>
     </>
   );
 }

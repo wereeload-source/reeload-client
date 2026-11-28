@@ -1,16 +1,29 @@
 "use client";
+import { Alert, Button, Form } from "@heroui/react";
+import { LogIn } from "lucide-react";
 import { useActionState } from "react";
+import { TextInput } from "@/components/fields";
 import { signIn } from "./actions";
 
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState(signIn, null);
   return (
-    <form action={action} className="grid gap-3">
+    <Form action={action} className="grid gap-3">
       <input type="hidden" name="next" value={next} />
-      <label className="label">Email<input className="input" name="email" type="email" autoComplete="email" required /></label>
-      <label className="label">Password<input className="input" name="password" type="password" autoComplete="current-password" required /></label>
-      {state?.error && <p className="text-[13px] text-rec">{state.error}</p>}
-      <button className="btn btn-pri justify-center" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
-    </form>
+      <TextInput name="email" label="Email" type="email" autoComplete="email" isRequired />
+      <TextInput name="password" label="Password" type="password" autoComplete="current-password" isRequired />
+      {state?.error && (
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>{state.error}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      )}
+      <Button type="submit" size="lg" fullWidth isPending={pending}>
+        <LogIn aria-hidden className="size-4" />
+        {pending ? "Signing in…" : "Sign in"}
+      </Button>
+    </Form>
   );
 }

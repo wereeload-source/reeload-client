@@ -1,36 +1,63 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireProfile } from "@/lib/session";
-import { ROLE_LABEL, ROLE_NAV } from "@/lib/types";
-import { Avatar } from "@/components/ui";
-import { signOut } from "@/app/login/actions";
-import { Sidebar } from "./sidebar";
+import { Brand } from "@/components/brand";
+import { NoticeBell } from "@/components/notice-bell";
+import { UserMenu } from "@/components/user-menu";
+import { canOpen, homeFor, mayOpenPath, menuFor } from "@/lib/nav";
+import { api, requireProfile } from "@/lib/session";
+import { PATH_HEADER } from "@/lib/token";
+import type { Notifications } from "@/lib/types";
+import { JobSearch } from "./job-search";
+import { Sidebar, TopNav } from "./sidebar";
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const { me } = await requireProfile();
   if (me.role === "reelmaker") redirect("/m");
-  const items = ROLE_NAV[me.role];
+  // Pages outside this role's menu send it home here, before the page's loading screen starts streaming.
+  const path = (await headers()).get(PATH_HEADER) ?? "";
+  if (path && !mayOpenPath(me.role, path)) redirect(homeFor(me.role));
+  const items = menuFor(me.role);
+  // The unread count is a nice-to-have: a failure here must not take the whole console down.
+  const unread = await api.get<Notifications>("/notifications?unread=true&limit=1").then((n) => n.unread, () => 0);
+  const user = { full_name: me.full_name, email: me.email, role: me.role };
+
+  // Admin: the dashboard mockup's left menu, with a header over the page. Everyone else: the top bar from their mockups.
+  if (me.role === "admin") {
+    return (
+      <div className="flex min-h-dvh flex-col bg-bg md:flex-row">
+        <aside
+          aria-label="Main"
+          className="flex flex-col gap-7 bg-side px-4 py-6 text-sideink print:hidden md:sticky md:top-0 md:h-dvh md:w-[248px] md:flex-none md:overflow-y-auto"
+        >
+          <Brand />
+          <Sidebar items={items} badges={{}} />
+          <p className="mt-auto px-3 text-xs leading-normal text-sidemute2">Full access · all prices. Every change is written to the audit log.</p>
+        </aside>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-line bg-paper/95 px-8 py-2 backdrop-blur print:hidden max-sm:px-4">
+            {canOpen(me.role, "jobs") && <JobSearch />}
+            <div className="ml-auto flex items-center gap-1">
+              <NoticeBell unread={unread} />
+              <UserMenu me={user} />
+            </div>
+          </header>
+          <main className="flex min-w-0 flex-1 flex-col gap-6 px-8 py-7 max-sm:px-4">{children}</main>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid min-h-dvh grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="sticky top-0 flex h-dvh flex-col gap-1 bg-side px-3 py-4 text-sideink">
-        <div className="flex items-center gap-2.5 px-2 pb-3.5 font-display text-[19px] font-bold tracking-tight text-white">
-          {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG */}
-          <img src="/logo.svg" alt="" width={30} height={30} className="rounded-[9px] shadow-[0_0_0_3px_rgba(223,59,43,.18)]" /> ReelOps
+    <div className="min-h-dvh bg-bg">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-5 bg-side px-8 py-2 text-sideink print:hidden max-sm:px-4">
+        <Brand small />
+        <TopNav items={items} />
+        <div className="ml-auto flex items-center gap-1">
+          <NoticeBell unread={unread} dark />
+          <UserMenu me={user} dark />
         </div>
-        <Sidebar items={items} badges={{}} />
-        <div className="mt-auto border-t border-[#22252a] pt-3">
-          <div className="mb-1.5 ml-1 text-[13px] text-[#5f646d]">Signed in as</div>
-          <div className="flex items-center gap-2 px-1">
-            <Avatar name={me.full_name} size={28} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-white">{me.full_name}</div>
-              <div className="text-xs text-sidemute">{ROLE_LABEL[me.role]}</div>
-            </div>
-          </div>
-          <form action={signOut}><button className="mt-2 w-full rounded-md px-2 py-1.5 text-left text-[13px] text-sidemute hover:bg-side2 hover:text-white">Sign out</button></form>
-        </div>
-      </aside>
-      <main className="flex min-w-0 flex-col bg-sub">{children}</main>
+      </header>
+      <main className="mx-auto flex max-w-[1280px] flex-col gap-5 px-8 py-7 max-sm:px-4">{children}</main>
     </div>
   );
 }

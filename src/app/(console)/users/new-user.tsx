@@ -1,45 +1,41 @@
 "use client";
-import { useActionState, useRef, useState } from "react";
+import { UserPlus } from "lucide-react";
+import { useState } from "react";
+import { SelectInput, TextInput } from "@/components/fields";
+import { FormDialog } from "@/components/form-dialog";
 import { ROLE_LABEL, type Role } from "@/lib/types";
 import { createUser } from "./actions";
 
-export function NewUser() {
-  const form = useRef<HTMLFormElement>(null);
-  const [role, setRole] = useState<Role>("sales");
-  const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState(async (prev: unknown, data: FormData) => {
-    const r = await createUser(prev, data);
-    if (r.ok) { form.current?.reset(); setOpen(false); }
-    return r;
-  }, null as { error?: string; ok?: true } | null);
+const ROLE_OPTIONS = (Object.keys(ROLE_LABEL) as Role[]).map((r) => ({ id: r, label: ROLE_LABEL[r] }));
 
-  if (!open) return <button className="btn btn-pri" onClick={() => setOpen(true)}>New user</button>;
+export function NewUser() {
+  const [role, setRole] = useState<Role>("sales");
   return (
-    <form ref={form} action={action} className="card grid max-w-xl gap-3 p-4">
+    <FormDialog
+      trigger="New user"
+      icon={UserPlus}
+      title="New user"
+      description="Give them a temporary password and ask them to change it after signing in."
+      submitLabel="Create user"
+      success="User created"
+      onSubmit={async (form) => {
+        const r = await createUser(null, form);
+        if (r.error) throw new Error(r.error);
+      }}
+    >
       <div className="grid grid-cols-2 gap-3">
-        <label className="label">Full name<input className="input" name="full_name" required /></label>
-        <label className="label">Phone<input className="input" name="phone" inputMode="tel" /></label>
-        <label className="label">Email<input className="input" name="email" type="email" required /></label>
-        <label className="label">Temporary password<input className="input" name="password" type="text" minLength={8} required autoComplete="off" /></label>
-        <label className="label">Role
-          <select className="input" name="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {(Object.keys(ROLE_LABEL) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-          </select>
-        </label>
+        <TextInput name="full_name" label="Full name" isRequired maxLength={120} />
+        <TextInput name="phone" label="Phone" type="tel" inputMode="tel" maxLength={20} />
+        <TextInput name="email" label="Email" type="email" isRequired className="col-span-2" />
+        <TextInput name="password" label="Temporary password" type="text" isRequired minLength={8} autoComplete="off" className="col-span-2" description="At least 8 characters." />
+        <SelectInput name="role" label="Role" options={ROLE_OPTIONS} value={role} onChange={(v) => setRole(v as Role)} isRequired />
         {role === "reelmaker" && (
           <>
-            <label className="label">Type
-              <select className="input" name="kind"><option value="full_time">Full time</option><option value="freelance">Freelance</option></select>
-            </label>
-            <label className="label">Base city<input className="input" name="base_city" required /></label>
+            <SelectInput name="kind" label="Type" defaultValue="full_time" options={[{ id: "full_time", label: "Full time" }, { id: "freelance", label: "Freelance" }]} />
+            <TextInput name="base_city" label="Base city" isRequired className="col-span-2" />
           </>
         )}
       </div>
-      {state?.error && <p className="text-[13px] text-rec">{state.error}</p>}
-      <div className="flex gap-2">
-        <button className="btn btn-pri" disabled={pending}>{pending ? "Creating…" : "Create user"}</button>
-        <button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button>
-      </div>
-    </form>
+    </FormDialog>
   );
 }
