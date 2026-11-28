@@ -30,7 +30,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         )}
       </PageBar>
       <Pane>
-        <form className="card flex flex-wrap items-center gap-1.5" role="search">
+        <form className="box flex flex-wrap items-center gap-1.5" role="search">
           {FILTERS.map((f) => (
             <Link
               key={f}
@@ -46,7 +46,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           <label className="relative">
             <span className="sr-only">Search jobs</span>
             <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-mute" />
-            <input name="q" defaultValue={q} placeholder="Client, phone, city or RL-1001" maxLength={80} className="input w-64 pl-8" />
+            <input name="q" defaultValue={q} placeholder="Client, phone, city or RL-1001" maxLength={80} className="field w-64 pl-8" />
           </label>
         </form>
         <Panel flush>

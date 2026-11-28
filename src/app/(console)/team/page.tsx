@@ -20,7 +20,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       <PageBar title="Reelmakers">
         <form className="flex items-center gap-2 text-sm">
           <label htmlFor="month" className="text-mute">Month</label>
-          <input id="month" name="month" type="month" defaultValue={month} className="input w-40" />
+          <input id="month" name="month" type="month" defaultValue={month} className="field w-40" />
           <button className="button button--secondary button--sm">Show</button>
         </form>
       </PageBar>

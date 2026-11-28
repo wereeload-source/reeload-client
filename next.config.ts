@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Every screen needs the signed-in user, so none can be prerendered; loading.tsx files show a
+  // skeleton at once instead. Only check instant navigation where a page opts in with `instant`.
+  experimental: {
+    instantInsights: { validationLevel: "manual-warning" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },

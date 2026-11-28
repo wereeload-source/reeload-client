@@ -22,7 +22,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       <Pane>
         <form className="flex items-center gap-2 text-sm">
           <label htmlFor="date" className="text-mute">Day</label>
-          <input id="date" name="date" type="date" defaultValue={date} className="input w-44" />
+          <input id="date" name="date" type="date" defaultValue={date} className="field w-44" />
           <button className="button button--secondary button--sm">Show</button>
           <span className="text-mute">{longDay(`${date}T12:00:00+05:30`)}</span>
         </form>

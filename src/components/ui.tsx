@@ -76,7 +76,7 @@ export function Panel({ title, icon: Icon, aside, children, flush }: {
   title?: string; icon?: LucideIcon; aside?: React.ReactNode; children: React.ReactNode; flush?: boolean;
 }) {
   return (
-    <section className={`card ${flush ? "px-2 py-1.5" : ""}`}>
+    <section className={`box ${flush ? "px-2 py-1.5" : ""}`}>
       {title && (
         <h3 className={flush ? "px-2 pt-2" : ""}>
           {Icon && <Icon aria-hidden className="size-4 text-mute" />}

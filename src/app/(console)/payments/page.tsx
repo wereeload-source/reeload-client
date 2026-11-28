@@ -41,7 +41,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           <label className="relative">
             <span className="sr-only">Search</span>
             <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-mute" />
-            <input name="q" defaultValue={q} placeholder="Client, city or RL-1001" maxLength={80} className="input w-64 pl-8" />
+            <input name="q" defaultValue={q} placeholder="Client, city or RL-1001" maxLength={80} className="field w-64 pl-8" />
           </label>
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="owing" value="1" defaultChecked={owing} className="accent-rec" /> Only jobs that owe money</label>
           <button className="button button--secondary button--sm">Apply</button>

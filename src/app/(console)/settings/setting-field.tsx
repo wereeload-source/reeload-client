@@ -44,7 +44,7 @@ export function SettingField({ name, label, value, min, max, unit }: { name: str
       }}
     >
       <label htmlFor={name} className="min-w-64">{label}</label>
-      <input id={name} className="input w-24" type="number" min={min} max={max} step={1} value={draft} onChange={(e) => setDraft(e.target.value)} aria-invalid={!valid} />
+      <input id={name} className="field w-24" type="number" min={min} max={max} step={1} value={draft} onChange={(e) => setDraft(e.target.value)} aria-invalid={!valid} />
       <span className="text-mute">{unit}{min !== undefined && max !== undefined ? ` (${min}–${max})` : ""}</span>
       <Button type="submit" size="sm" variant="secondary" isDisabled={!valid || draft === String(value)} isPending={pending}>
         <Save aria-hidden className="size-3.5" /> Save

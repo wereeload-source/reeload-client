@@ -15,7 +15,7 @@ export function NewJobForm() {
   const canConfirm = Number(advance) > 0 && consent;
 
   return (
-    <Form action={action} className="card grid max-w-3xl gap-4 p-5">
+    <Form action={action} className="box grid max-w-3xl gap-4 p-5">
       <p className="text-sm text-mute">A job stays a draft until the advance is recorded and the client consents.</p>
 
       <fieldset className="grid gap-3 sm:grid-cols-2">

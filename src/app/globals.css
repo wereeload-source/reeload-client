@@ -32,6 +32,15 @@
   --accent: #df3b2b;
   --accent-foreground: #ffffff;
   --focus: #df3b2b;
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --surface: var(--paper);
+  --overlay: var(--paper);
+  --border: var(--line);
+  /* Fields sit on cards: a slightly different fill and a visible edge in both themes. */
+  --field-background: var(--sub);
+  --field-border: var(--line);
+  --field-border-width: 1px;
 }
 
 @theme inline {
@@ -71,12 +80,9 @@ body {
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.015em; }
 
 @layer components {
-  .card { @apply rounded-[10px] border border-line bg-paper px-4 py-3.5; }
-  .card h3 { @apply mb-2.5 flex items-center gap-2 text-[15px] font-bold; }
-  .btn { @apply inline-flex min-h-[34px] items-center gap-2 whitespace-nowrap rounded-[7px] border border-line bg-paper px-3 py-1.5 text-[13.5px] font-medium hover:bg-sub disabled:cursor-not-allowed disabled:opacity-45; }
-  .btn-pri { @apply border-rec bg-rec text-white hover:bg-rec hover:brightness-105; }
-  .input { @apply w-full rounded-[9px] border border-line bg-paper px-2.5 py-2 text-[15px]; }
-  .label { @apply grid gap-1 text-[13px] font-semibold; }
+  .box { @apply rounded-[10px] border border-line bg-paper px-4 py-3.5; }
+  .box h3 { @apply mb-2.5 flex items-center gap-2 text-[15px] font-bold; }
+  .field { @apply w-full rounded-[9px] border border-line bg-paper px-2.5 py-2 text-[15px]; }
   .tbl { @apply w-full border-collapse text-sm; }
   .tbl th { @apply border-b border-line px-2.5 py-2 text-left text-[13px] font-semibold text-mute; }
   .tbl td { @apply border-b border-line p-2.5 align-middle; }

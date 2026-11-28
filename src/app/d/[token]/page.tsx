@@ -34,12 +34,12 @@ export default async function DownloadPage({ params }: { params: Promise<{ token
         <img src="/logo.svg" alt="" width={30} height={30} /> Reeload
       </div>
       {!r.ok ? (
-        <div className="card">
+        <div className="box">
           <h3><LinkIcon aria-hidden className="size-4 text-mute" />{r.message}</h3>
           <p className="text-mute">Ask the team for a new link.</p>
         </div>
       ) : (
-        <div className="card">
+        <div className="box">
           <h3>{r.data.client} · {r.data.job}</h3>
           <p className="mb-3 text-sm text-mute">
             {r.data.shot_on && <>Shot on {longDay(r.data.shot_on)}. </>}This link works until {longDay(r.data.expires_at)}.

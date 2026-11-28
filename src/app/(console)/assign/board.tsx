@@ -57,7 +57,7 @@ export function AssignBoard({ jobs }: { jobs: QueueJob[] }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-      <div className="card px-2 py-1.5">
+      <div className="box px-2 py-1.5">
         {jobs.length ? (
           <table className="tbl">
             <thead><tr><th>Job</th><th>Client</th><th>When</th><th>Note</th></tr></thead>
@@ -85,7 +85,7 @@ export function AssignBoard({ jobs }: { jobs: QueueJob[] }) {
         ) : <Empty icon={UserRoundCheck}>Every confirmed job has a reelmaker.</Empty>}
       </div>
 
-      <div className="card">
+      <div className="box">
         {job ? (
           <>
             <h3>{job.client_name}</h3>
