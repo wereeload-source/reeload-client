@@ -1,45 +1,68 @@
-import { ChevronRight, MapPin } from "lucide-react";
-import Link from "next/link";
-import { day, hours, isToday, time } from "@/lib/format";
+import { Card } from "@heroui/react";
+import { LinkButton } from "@/components/link-button";
+import { Chip, Empty } from "@/components/ui";
+import { fullDay, hours, isToday, istDate, longDay, window_ } from "@/lib/format";
 import { api, requireProfile } from "@/lib/session";
-import type { Shoot } from "@/lib/types";
+import type { HoursRow, Shoot } from "@/lib/types";
+import { MHeader, MMain } from "./header";
 import { Respond } from "./respond";
 
 export default async function MyShoots() {
-  await requireProfile();
-  const shoots = (await api.get<Shoot[]>("/me/shoots?when=upcoming")).sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""));
-  const requests = shoots.filter((r) => r.assignment_status === "pending");
-  const accepted = shoots.filter((r) => r.assignment_status === "accepted");
-  const today = accepted.filter((r) => isToday(r.starts_at));
-  const later = accepted.filter((r) => !isToday(r.starts_at));
+  const { me } = await requireProfile();
+  const [all, sum] = await Promise.all([
+    api.get<Shoot[]>("/me/shoots?when=upcoming"),
+    api.get<{ month: string; items: HoursRow[] }>(`/hours?month=${istDate().slice(0, 7)}`).catch(() => ({ month: "", items: [] as HoursRow[] })),
+  ]);
+  const shoots = all
+    .filter((s) => s.assignment_status === "pending" || s.assignment_status === "accepted")
+    .sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""));
+  const today = shoots.filter((s) => isToday(s.starts_at)).length;
+  const h = sum.items[0];
 
   return (
     <>
-      <h1 className="py-2 font-display text-[26px] font-bold tracking-tight">My shoots</h1>
-      {today.map((r) => (
-        <div key={r.job_id} className="mcard bg-[radial-gradient(120%_90%_at_100%_0%,#3a1310_0%,#121417_55%)] text-white">
-          <div className="flex justify-between text-[13px] text-[#a6acb6]"><span>Today · {time(r.starts_at)}</span><span className="rounded bg-[#3a1714] px-1.5 capitalize text-[#ff7a6e]">{r.status}</span></div>
-          <h2 className="mb-0.5 mt-1.5 text-[22px]">{r.client_name}</h2>
-          <div className="flex items-center gap-1 text-sm text-[#a6acb6]"><MapPin aria-hidden className="size-3.5" />{r.address ?? r.city}</div>
-          <Link href={`/m/shoots/${r.job_id}`} className="mbtn mt-3.5">Open shoot</Link>
+      <MHeader title="My shoots" subtitle={`${me.full_name} · Reelmaker`} signOutButton />
+      <MMain>
+        <div className="text-[13px] font-medium text-mute">
+          {fullDay().replace(/,? \d{4}$/, "")} · {today} {today === 1 ? "shoot" : "shoots"} today
         </div>
-      ))}
-      {requests.map((r) => (
-        <div key={r.job_id} className="mcard">
-          <div className="flex justify-between"><b>New request</b><span className="text-[13px] text-mute">{day(r.starts_at)} · {time(r.starts_at)}</span></div>
-          <div className="mb-2.5 mt-1">{r.client_name} · {r.city} · {hours(r.duration_minutes)}</div>
-          {r.brief && <p className="mb-2.5 text-sm text-mute">{r.brief}</p>}
-          <Respond jobId={r.job_id} />
-        </div>
-      ))}
-      <h2 className="mx-1 mb-2 mt-4 font-bold">Coming up</h2>
-      {later.length ? later.map((r) => (
-        <Link key={r.job_id} href={`/m/shoots/${r.job_id}`} className="mcard flex items-center gap-2.5 px-3.5 py-3">
-          <div className="w-[58px]"><b>{day(r.starts_at)}</b><div className="text-[13px] text-mute">{time(r.starts_at)}</div></div>
-          <div className="flex-1">{r.client_name}<div className="text-[13px] text-mute">{r.city}</div></div>
-          <ChevronRight aria-hidden className="size-4 text-mute" />
-        </Link>
-      )) : <p className="mx-1 text-mute">Nothing else booked.</p>}
+
+        {shoots.length ? (
+          shoots.map((s) => {
+            const pending = s.assignment_status === "pending";
+            return (
+              <Card key={s.job_id} className="gap-3 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[13px] font-medium">
+                    {isToday(s.starts_at) ? "Today" : longDay(s.starts_at)} · {window_(s.starts_at, s.duration_minutes)}
+                  </span>
+                  {pending ? <Chip tone="warn">Awaiting accept</Chip> : <Chip tone="ok">Accepted</Chip>}
+                </div>
+                <div>
+                  <div className="font-display text-lg font-semibold">{s.client_name}</div>
+                  <div className="mt-0.5 text-sm text-mute2">{s.address ? `${s.address}, ${s.city}` : s.city} · {hours(s.duration_minutes)}</div>
+                </div>
+                {pending && s.brief && <p className="m-0 text-sm text-mute2">{s.brief}</p>}
+                {pending ? (
+                  <Respond jobId={s.job_id} />
+                ) : (
+                  <LinkButton href={`/m/shoots/${s.job_id}`} size="lg" className="w-full bg-ink">Open job</LinkButton>
+                )}
+              </Card>
+            );
+          })
+        ) : (
+          <Card className="p-4"><Empty>No shoots booked. New requests appear here.</Empty></Card>
+        )}
+
+        <Card className="flex-row items-center justify-between p-4">
+          <div>
+            <div className="text-[13px] text-mute">My hours this month</div>
+            <div className="font-display text-[26px] font-bold">{h?.total_hours ?? 0} h</div>
+          </div>
+          <LinkButton href="/m/hours" variant="ghost" className="font-semibold text-rec">Details</LinkButton>
+        </Card>
+      </MMain>
     </>
   );
 }

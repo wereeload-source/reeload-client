@@ -1,12 +1,13 @@
-import { CheckCircle2, MessagesSquare, PhoneCall, Repeat, XCircle } from "lucide-react";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Chip, Empty, Kpi, Panel } from "@/components/ui";
+import { Cell, DataTable, Row, type Column } from "@/components/data-table";
+import { DateJump } from "@/components/date-jump";
+import { PageBar } from "@/components/page-bar";
+import { Chip, Kpi, Kpis, Panel, type Tone } from "@/components/ui";
 import { istDate, longDay, time } from "@/lib/format";
 import { api, requirePage } from "@/lib/session";
-import { OUTCOME_LABEL, type Contacts } from "@/lib/types";
+import { OUTCOME_LABEL, type ContactOutcome, type Contacts } from "@/lib/types";
 import { LogCall } from "./log-call";
 
-const TONE = { approved: "ok", rejected: "rec", follow_up: "blue", spoken: undefined } as const;
+const TONE: Record<ContactOutcome, Tone> = { approved: "ok", rejected: "bad", follow_up: "info", spoken: "neutral" };
 
 export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const { me } = await requirePage("contacts");
@@ -14,52 +15,55 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   const date = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : istDate();
   const data = await api.get<Contacts>(`/contacts?date=${date}`);
   const rows = data.items;
-  const n = (o: string) => rows.filter((r) => r.outcome === o).length;
+  const n = (o: ContactOutcome) => rows.filter((r) => r.outcome === o).length;
+  const admin = me.role === "admin";
+  const columns: Column[] = [{ label: "Time" }, { label: "Client" }, { label: "Phone" }, { label: "Outcome" }, { label: "Note" }];
+  if (admin) columns.push({ label: "By" });
 
   return (
     <>
-      <PageBar title="Contact log"><LogCall /></PageBar>
-      <Pane>
-        <form className="flex items-center gap-2 text-sm">
-          <label htmlFor="date" className="text-mute">Day</label>
-          <input id="date" name="date" type="date" defaultValue={date} className="field w-44" />
-          <button className="button button--secondary button--sm">Show</button>
-          <span className="text-mute">{longDay(`${date}T12:00:00+05:30`)}</span>
-        </form>
-        <div className="kpis">
-          <Kpi icon={PhoneCall} label="Spoken" value={rows.length} />
-          <Kpi icon={CheckCircle2} label="Approved" value={n("approved")} />
-          <Kpi icon={XCircle} label="Rejected" value={n("rejected")} />
-          <Kpi icon={Repeat} label="Follow-ups" value={n("follow_up")} />
-        </div>
-        {me.role === "admin" && data.counts.length > 1 && (
-          <Panel title="By salesperson" flush>
-            <table className="tbl">
-              <thead><tr><th>Salesperson</th><th className="num">Spoken</th><th className="num">Approved</th><th className="num">Rejected</th><th className="num">Follow-ups</th></tr></thead>
-              <tbody>{data.counts.map((c) => <tr key={c.salesperson_id}><td>{c.full_name}</td><td className="num">{c.spoken}</td><td className="num">{c.approved}</td><td className="num">{c.rejected}</td><td className="num">{c.follow_ups}</td></tr>)}</tbody>
-            </table>
-          </Panel>
-        )}
-        <Panel flush>
-          {rows.length ? (
-            <table className="tbl">
-              <thead><tr><th>Time</th><th>Client</th><th>Phone</th><th>Outcome</th><th>Note</th>{me.role === "admin" && <th>By</th>}</tr></thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="text-mute">{time(r.created_at)}</td>
-                    <td><b>{r.client_name}</b></td>
-                    <td className="font-mono">{r.phone}</td>
-                    <td><Chip tone={TONE[r.outcome]}>{OUTCOME_LABEL[r.outcome]}</Chip></td>
-                    <td className="text-mute">{r.note}</td>
-                    {me.role === "admin" && <td>{r.salesperson_name}</td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <Empty icon={MessagesSquare}>No calls logged on this day.</Empty>}
+      <PageBar title="Contact log" note="Every call, approved or not, so the day's numbers add up.">
+        <LogCall />
+      </PageBar>
+      <DateJump action="/contacts" name="date" label="Day" type="date" value={date} after={longDay(`${date}T12:00:00+05:30`)} />
+      <Kpis>
+        <Kpi label="Spoken" value={rows.length} />
+        <Kpi label="Approved" value={n("approved")} tone="ok" note="Ready to become jobs" />
+        <Kpi label="Rejected" value={n("rejected")} tone="bad" />
+        <Kpi label="Follow-ups" value={n("follow_up")} tone="info" />
+      </Kpis>
+      {admin && data.counts.length > 1 && (
+        <Panel title="By salesperson">
+          <DataTable
+            label="Calls by salesperson"
+            columns={[{ label: "Person" }, { label: "Spoken", align: "end" }, { label: "Approved", align: "end" }, { label: "Rejected", align: "end" }, { label: "Follow-ups", align: "end" }]}
+          >
+            {data.counts.map((c) => (
+              <Row key={c.salesperson_id}>
+                <Cell className="font-medium">{c.full_name}</Cell>
+                <Cell className="text-right font-mono">{c.spoken}</Cell>
+                <Cell className="text-right font-mono text-ok">{c.approved}</Cell>
+                <Cell className="text-right font-mono text-bad">{c.rejected}</Cell>
+                <Cell className="text-right font-mono">{c.follow_ups}</Cell>
+              </Row>
+            ))}
+          </DataTable>
         </Panel>
-      </Pane>
+      )}
+      <Panel title="Calls">
+        <DataTable label="Calls" minWidth={640} isEmpty={!rows.length} empty="No calls logged on this day." columns={columns}>
+          {rows.map((r) => (
+            <Row key={r.id}>
+              <Cell className="font-mono text-[13px] text-mute">{time(r.created_at)}</Cell>
+              <Cell className="font-semibold">{r.client_name}</Cell>
+              <Cell className="font-mono text-[13px]">{r.phone}</Cell>
+              <Cell><Chip tone={TONE[r.outcome]}>{OUTCOME_LABEL[r.outcome]}</Chip></Cell>
+              <Cell className="text-mute">{r.note}</Cell>
+              {admin ? <Cell>{r.salesperson_name}</Cell> : null}
+            </Row>
+          ))}
+        </DataTable>
+      </Panel>
     </>
   );
 }

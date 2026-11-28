@@ -1,46 +1,68 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/* Reeload theme, taken from the approved mockup ("editing-suite" look). */
-:root {
-  color-scheme: light dark;
-}
+/*
+ * Reeload theme, from the approved UI mockups (ReelOps – UI Mockups): a light console on a cool grey
+ * page, white cards, a near-black navigation bar, one red-orange accent, Space Grotesk headings,
+ * Inter body and JetBrains Mono for times, codes and money.
+ */
+:root,
+:root.light {
+  color-scheme: light;
 
-/* Follow the theme the layout script picked, so our colours and HeroUI's always agree. */
-:root.light { color-scheme: light; }
-:root.dark { color-scheme: dark; }
+  --bg: #f3f4f6;
+  --paper: #ffffff;
+  --sub: #f7f8fa;
+  --line: #e3e5ea;
+  --line2: #edeef1;
+  --edge: #c9cdd5;
+  --ink: #0e1116;
+  --mute: #5b6472;
+  --mute2: #4a5260;
 
-:root {
-  --bg: light-dark(#e9e7e3, #0b0c0e);
-  --paper: light-dark(#ffffff, #15171b);
-  --sub: light-dark(#f6f7f9, #1c1f24);
-  --line: light-dark(#e3e6ea, #2a2e35);
-  --ink: light-dark(#121417, #eef0f3);
-  --mute: light-dark(#5d6470, #9aa1ad);
-  --rec: #df3b2b;
-  --recs: light-dark(#fdecea, #3a1714);
-  --ok: light-dark(#137a46, #4cd08a);
-  --oks: light-dark(#e5f5ec, #11301f);
-  --warn: light-dark(#a15c00, #f0b453);
-  --warns: light-dark(#fff3dc, #33260c);
-  --blue: light-dark(#2449c9, #86a2ff);
-  --blues: light-dark(#e8eeff, #18213d);
-  --vio: light-dark(#6a3fc4, #b9a0f5);
-  --vios: light-dark(#f0eafd, #261c3d);
+  --rec: #c93a06;
+  --recs: #fff7f3;
+  --ok: #0b6b4f;
+  --oks: #e3f4ec;
+  --info: #1f4fd8;
+  --infos: #e6edff;
+  --warn: #8a5300;
+  --warns: #fff1d6;
+  --bad: #b3261e;
+  --bads: #fde7e5;
+  --neutral: #3a424f;
+  --neutrals: #edeef1;
 
-  /* HeroUI tokens mapped onto the Reeload palette, so its components match the rest of the app. */
-  --accent: #df3b2b;
+  --side: #0e1116;
+  --side2: #1e242d;
+  --side3: #1a1f27;
+  --sideink: #e8eaee;
+  --sidemute: #c3c8d1;
+  --sidemute2: #a9b0bc;
+
+  /* HeroUI tokens on the same palette, so its components match the mockup. */
+  --accent: #c93a06;
   --accent-foreground: #ffffff;
-  --focus: #df3b2b;
+  --focus: #9db7ff;
+  --success: #0b6b4f;
+  --success-foreground: #ffffff;
+  --warning: #8a5300;
+  --warning-foreground: #ffffff;
+  --danger: #b3261e;
+  --danger-foreground: #ffffff;
   --background: var(--bg);
   --foreground: var(--ink);
+  --muted: var(--mute);
   --surface: var(--paper);
   --overlay: var(--paper);
   --border: var(--line);
-  /* Fields sit on cards: a slightly different fill and a visible edge in both themes. */
-  --field-background: var(--sub);
-  --field-border: var(--line);
+  --separator: var(--line2);
+  --field-background: #ffffff;
+  --field-foreground: var(--ink);
+  --field-border: var(--edge);
   --field-border-width: 1px;
+  --field-radius: 8px;
+  --radius: 0.5rem;
 }
 
 @theme inline {
@@ -48,25 +70,32 @@
   --color-paper: var(--paper);
   --color-sub: var(--sub);
   --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-edge: var(--edge);
   --color-ink: var(--ink);
   --color-mute: var(--mute);
+  --color-mute2: var(--mute2);
   --color-rec: var(--rec);
   --color-recs: var(--recs);
   --color-ok: var(--ok);
   --color-oks: var(--oks);
+  --color-info: var(--info);
+  --color-infos: var(--infos);
   --color-warn: var(--warn);
   --color-warns: var(--warns);
-  --color-blue: var(--blue);
-  --color-blues: var(--blues);
-  --color-vio: var(--vio);
-  --color-vios: var(--vios);
-  --color-side: #0e0f11;
-  --color-side2: #1a1c20;
-  --color-sideink: #e9eaec;
-  --color-sidemute: #8a8f98;
-  --font-sans: var(--font-geist), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-display: var(--font-funnel), var(--font-geist), sans-serif;
+  --color-bad: var(--bad);
+  --color-bads: var(--bads);
+  --color-neutral: var(--neutral);
+  --color-neutrals: var(--neutrals);
+  --color-side: var(--side);
+  --color-side2: var(--side2);
+  --color-side3: var(--side3);
+  --color-sideink: var(--sideink);
+  --color-sidemute: var(--sidemute);
+  --color-sidemute2: var(--sidemute2);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --font-display: var(--font-grotesk), var(--font-inter), sans-serif;
 }
 
 body {
@@ -77,21 +106,9 @@ body {
   line-height: 1.5;
 }
 
-h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.015em; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
 
-@layer components {
-  .box { @apply overflow-x-auto rounded-[10px] border border-line bg-paper px-4 py-3.5; }
-  .box h3 { @apply mb-2.5 flex items-center gap-2 text-[15px] font-bold; }
-  .field { @apply w-full rounded-[9px] border border-line bg-paper px-2.5 py-2 text-[15px]; }
-  .tbl { @apply w-full border-collapse text-sm; }
-  .tbl td:first-child, .tbl th { @apply whitespace-nowrap; }
-  .tbl th { @apply border-b border-line px-2.5 py-2 text-left text-[13px] font-semibold text-mute; }
-  .tbl td { @apply border-b border-line p-2.5 align-middle; }
-  .tbl tr:last-child td { @apply border-b-0; }
-  .num { @apply text-right tabular-nums whitespace-nowrap; }
-  .kpis { @apply grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-paper lg:grid-cols-4; }
-  .kpi { @apply border-l border-line px-[18px] py-4 first:border-l-0; }
-  .mbtn { @apply flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-rec p-3.5 text-base font-semibold text-white disabled:opacity-40; }
-  .mbtn-ghost { @apply border border-line bg-paper text-ink; }
-  .mcard { @apply mb-3 rounded-[18px] bg-sub p-3.5; }
-}
+/* Mockup cards: white, 1px #E3E5EA edge, 14px corners, no shadow. */
+.card { box-shadow: none; border: 1px solid var(--line); border-radius: 14px; }
+/* Table headers: small uppercase grey, as in the mockup. */
+.table__column { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; color: var(--mute); font-weight: 600; }

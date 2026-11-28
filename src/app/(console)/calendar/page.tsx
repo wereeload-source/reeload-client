@@ -1,8 +1,9 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { LinkButton } from "@/components/link-button";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Avatar, Chip, Empty, Panel, StatusChip } from "@/components/ui";
-import { hours, istDate, longDay, time } from "@/lib/format";
+import { Cell, DataTable, Row } from "@/components/data-table";
+import { PageBar } from "@/components/page-bar";
+import { Chip, Empty, Panel, StatusChip } from "@/components/ui";
+import { istDate, longDay, window_ } from "@/lib/format";
 import { api, requirePage } from "@/lib/session";
 import { liveAssignment, type Job, type Paged } from "@/lib/types";
 
@@ -27,28 +28,36 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageBar title="Calendar">
-        <LinkButton href={`/calendar?from=${shift(from, -DAYS)}`} variant="secondary" size="sm"><ChevronLeft aria-hidden className="size-4" /> Earlier</LinkButton>
-        <LinkButton href="/calendar" variant="secondary" size="sm">Today</LinkButton>
-        <LinkButton href={`/calendar?from=${shift(from, DAYS)}`} variant="secondary" size="sm">Later <ChevronRight aria-hidden className="size-4" /></LinkButton>
+        <LinkButton href={`/calendar?from=${shift(from, -DAYS)}`} variant="outline" size="sm"><ChevronLeft aria-hidden className="size-4" /> Earlier</LinkButton>
+        <LinkButton href="/calendar" variant="outline" size="sm">Today</LinkButton>
+        <LinkButton href={`/calendar?from=${shift(from, DAYS)}`} variant="outline" size="sm">Later <ChevronRight aria-hidden className="size-4" /></LinkButton>
       </PageBar>
-      <Pane>
-        <p className="text-[13px] text-mute">{longDay(`${from}T12:00:00+05:30`)} to {longDay(`${shift(from, DAYS - 1)}T12:00:00+05:30`)}</p>
-        {days.length ? days.map((d) => (
-          <Panel key={d} title={longDay(`${d}T12:00:00+05:30`)} icon={CalendarDays}>
-            {jobs.filter((j) => istDate(new Date(j.starts_at!)) === d).map((j) => {
-              const rm = liveAssignment(j)?.full_name;
-              return (
-                <a key={j.id} href={`/jobs/${j.id}`} className="flex items-center gap-3 border-b border-line py-2.5 last:border-0 hover:bg-sub">
-                  <span className="w-24 flex-none font-mono text-[13px]">{time(j.starts_at)} · {hours(j.duration_minutes)}</span>
-                  <div className="flex-1"><b>{j.client_name}</b> <span className="text-mute">{j.city} · {j.code}</span></div>
-                  <StatusChip status={j.status} />
-                  {rm ? <span className="flex items-center gap-1.5"><Avatar name={rm} /><span className="hidden text-sm md:inline">{rm}</span></span> : <Chip tone="rec">Unassigned</Chip>}
-                </a>
-              );
-            })}
-          </Panel>
-        )) : <Panel><Empty icon={CalendarDays}>Nothing booked in these two weeks.</Empty></Panel>}
-      </Pane>
+      <p className="m-0 text-[13px] text-mute">{longDay(`${from}T12:00:00+05:30`)} to {longDay(`${shift(from, DAYS - 1)}T12:00:00+05:30`)}</p>
+      {days.length ? (
+        days.map((d) => {
+          const list = jobs.filter((j) => istDate(new Date(j.starts_at!)) === d);
+          return (
+            <Panel key={d} title={longDay(`${d}T12:00:00+05:30`)} icon={CalendarDays} aside={`${list.length} ${list.length === 1 ? "shoot" : "shoots"}`}>
+              <DataTable label={`Shoots on ${longDay(`${d}T12:00:00+05:30`)}`} minWidth={640} columns={[{ label: "Time" }, { label: "Client" }, { label: "Job" }, { label: "Reelmaker" }, { label: "Status" }]}>
+                {list.map((j) => {
+                  const rm = liveAssignment(j)?.full_name;
+                  return (
+                    <Row key={j.id} href={`/jobs/${j.id}`}>
+                      <Cell className="font-mono text-[13px] whitespace-nowrap">{window_(j.starts_at, j.duration_minutes)}</Cell>
+                      <Cell><div className="font-semibold">{j.client_name}</div><div className="text-xs text-mute">{j.city}</div></Cell>
+                      <Cell className="font-mono text-[13px] text-mute">{j.code}</Cell>
+                      <Cell className={rm ? "" : "font-semibold text-bad"}>{rm ?? "Unassigned"}</Cell>
+                      <Cell>{rm ? <StatusChip status={j.status} /> : <Chip tone="bad">Needs reelmaker</Chip>}</Cell>
+                    </Row>
+                  );
+                })}
+              </DataTable>
+            </Panel>
+          );
+        })
+      ) : (
+        <Panel><Empty icon={CalendarDays}>Nothing booked in these two weeks.</Empty></Panel>
+      )}
     </>
   );
 }

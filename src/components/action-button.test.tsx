@@ -1,5 +1,5 @@
 import { toast } from "@heroui/react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { router } from "@/test/setup";
 import { ActionButton } from "./action-button";
@@ -26,11 +26,22 @@ describe("ActionButton", () => {
     expect(router.refresh).not.toHaveBeenCalled();
   });
 
-  it("does nothing when the user cancels the confirmation", async () => {
-    const run = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<ActionButton run={run} confirm="Sure?">Revoke</ActionButton>);
+  it("asks in a dialog first, and does nothing when the user cancels", async () => {
+    const run = vi.fn().mockResolvedValue(undefined);
+    render(<ActionButton run={run} confirm="Revoke this link?">Revoke</ActionButton>);
     await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Revoke this link?");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("runs the call once the user confirms in the dialog", async () => {
+    const run = vi.fn().mockResolvedValue(undefined);
+    render(<ActionButton run={run} confirm="Revoke this link?">Revoke</ActionButton>);
+    await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(run).toHaveBeenCalledOnce());
   });
 });

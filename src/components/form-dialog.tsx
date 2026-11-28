@@ -1,5 +1,5 @@
 "use client";
-import { Alert, Button, Modal, toast } from "@heroui/react";
+import { Alert, Button, Form, Modal, toast } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,11 +13,12 @@ type ButtonVariant = "primary" | "secondary" | "tertiary" | "outline" | "ghost" 
  * in the dialog and nothing closes, so the user can fix it).
  */
 export function FormDialog({
-  trigger, icon: Icon, variant = "primary", size = "md", title, description, submitLabel = "Save", success, onSubmit, children, isDisabled,
+  trigger, icon: Icon, variant = "primary", size = "md", title, description, submitLabel = "Save", success, onSubmit, children, isDisabled, className, fullWidth,
 }: {
   trigger: string; icon?: LucideIcon; variant?: ButtonVariant; size?: "sm" | "md" | "lg";
   title: string; description?: React.ReactNode; submitLabel?: string; success?: string;
   onSubmit: (form: FormData) => Promise<unknown>; children: React.ReactNode; isDisabled?: boolean;
+  className?: string; fullWidth?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -42,7 +43,7 @@ export function FormDialog({
 
   return (
     <Modal>
-      <Button variant={variant} size={size} isDisabled={isDisabled} onPress={() => { setError(null); setOpen(true); }}>
+      <Button variant={variant} size={size} isDisabled={isDisabled} className={className} fullWidth={fullWidth} onPress={() => { setError(null); setOpen(true); }}>
         {Icon && <Icon aria-hidden className="size-4" />}
         {trigger}
       </Button>
@@ -50,7 +51,7 @@ export function FormDialog({
         <Modal.Container>
           <Modal.Dialog className="sm:max-w-[460px]">
             <Modal.CloseTrigger />
-            <form onSubmit={submit} noValidate={false}>
+            <Form onSubmit={submit}>
               <Modal.Header>
                 <Modal.Heading>{title}</Modal.Heading>
                 {description && <div className="text-sm text-mute">{description}</div>}
@@ -67,10 +68,10 @@ export function FormDialog({
                 )}
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="secondary" onPress={() => setOpen(false)} isDisabled={pending}>Cancel</Button>
+                <Button variant="tertiary" onPress={() => setOpen(false)} isDisabled={pending}>Cancel</Button>
                 <Button type="submit" isPending={pending}>{pending ? "Saving…" : submitLabel}</Button>
               </Modal.Footer>
-            </form>
+            </Form>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>

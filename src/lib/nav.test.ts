@@ -23,17 +23,9 @@ describe("navigation by role", () => {
 });
 
 describe("menuFor", () => {
-  it("lists each group once, so no heading repeats", () => {
-    for (const role of ["admin", "sales", "ops", "accounts"] as const) {
-      const groups = menuFor(role).map((k) => NAV[k].group).filter(Boolean);
-      const runs = groups.filter((g, i) => g !== groups[i - 1]);
-      expect(new Set(runs).size).toBe(runs.length);
-    }
-  });
-
-  it("keeps the same pages as ROLE_NAV and the same home page", () => {
-    expect([...menuFor("ops")].sort()).toEqual([...ROLE_NAV.ops].sort());
-    expect(homeFor("ops")).toBe("/assign");
-    expect(homeFor("sales")).toBe("/jobs");
+  it("lists the role's pages in menu order, home page first", () => {
+    expect(menuFor("ops")[0]).toBe("assign");
+    expect(menuFor("ops").map((k) => NAV[k].label)).toEqual(["Unassigned", "Calendar", "Review files", "Reelmakers and leave", "Jobs"]);
+    expect(new Set(menuFor("admin")).size).toBe(menuFor("admin").length);
   });
 });

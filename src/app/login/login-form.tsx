@@ -20,7 +20,7 @@ export function LoginForm({ next }: { next: string }) {
           </Alert.Content>
         </Alert>
       )}
-      <Button type="submit" fullWidth isPending={pending}>
+      <Button type="submit" size="lg" fullWidth isPending={pending}>
         <LogIn aria-hidden className="size-4" />
         {pending ? "Signing in…" : "Sign in"}
       </Button>

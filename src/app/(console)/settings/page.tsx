@@ -1,5 +1,5 @@
-import { Clock, FolderClock, Link2, Settings2 } from "lucide-react";
-import { PageBar, Pane } from "@/components/page-bar";
+import { Clock, FolderClock, Link2 } from "lucide-react";
+import { PageBar } from "@/components/page-bar";
 import { Panel } from "@/components/ui";
 import { api, requirePage } from "@/lib/session";
 import type { Setting } from "@/lib/types";
@@ -37,22 +37,19 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageBar title="Settings" />
-      <Pane>
-        <p className="flex items-center gap-1.5 text-[13px] text-mute"><Settings2 aria-hidden className="size-3.5" /> Each change is saved on its own and recorded in the audit log.</p>
-        <div className="grid max-w-2xl gap-4">
-          {GROUPS.map((g) => (
-            <Panel key={g.title} title={g.title} icon={g.icon}>
-              <div className="grid gap-3">
-                {g.keys.map((k) => {
-                  const v = value(k.key);
-                  return v === undefined ? null : <SettingField key={k.key} name={k.key} label={k.label} value={v} min={k.min} max={k.max} unit={k.unit} />;
-                })}
-              </div>
-            </Panel>
-          ))}
-        </div>
-      </Pane>
+      <PageBar title="Settings" note="Each change is saved on its own and recorded in the audit log." />
+      <div className="grid max-w-2xl gap-4">
+        {GROUPS.map((g) => (
+          <Panel key={g.title} title={g.title} icon={g.icon}>
+            <div className="grid gap-4">
+              {g.keys.map((k) => {
+                const v = value(k.key);
+                return v === undefined ? null : <SettingField key={k.key} name={k.key} label={k.label} value={v} min={k.min} max={k.max} unit={k.unit} />;
+              })}
+            </div>
+          </Panel>
+        ))}
+      </div>
     </>
   );
 }

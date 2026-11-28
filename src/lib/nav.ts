@@ -2,33 +2,32 @@ import type { Role } from "@/lib/types";
 
 export type NavKey = "dashboard" | "jobs" | "assign" | "calendar" | "review" | "payments" | "contacts" | "team" | "users" | "settings";
 
-export const NAV: Record<NavKey, { label: string; href: string; group: string }> = {
-  dashboard: { label: "Dashboard", href: "/dashboard", group: "" },
-  jobs: { label: "Jobs", href: "/jobs", group: "Work" },
-  assign: { label: "Assign shoots", href: "/assign", group: "Work" },
-  calendar: { label: "Calendar", href: "/calendar", group: "Work" },
-  review: { label: "Review & delivery", href: "/review", group: "Work" },
-  contacts: { label: "Contact log", href: "/contacts", group: "Sales" },
-  payments: { label: "Payments", href: "/payments", group: "Money" },
-  team: { label: "Reelmakers", href: "/team", group: "Team" },
-  users: { label: "Users", href: "/users", group: "Admin" },
-  settings: { label: "Settings", href: "/settings", group: "Admin" },
+/** Console pages, named as in the approved mockups. */
+export const NAV: Record<NavKey, { label: string; href: string }> = {
+  dashboard: { label: "Dashboard", href: "/dashboard" },
+  jobs: { label: "Jobs", href: "/jobs" },
+  calendar: { label: "Calendar", href: "/calendar" },
+  assign: { label: "Unassigned", href: "/assign" },
+  review: { label: "Review files", href: "/review" },
+  team: { label: "Reelmakers and leave", href: "/team" },
+  payments: { label: "Payments", href: "/payments" },
+  contacts: { label: "Contact log", href: "/contacts" },
+  users: { label: "Users", href: "/users" },
+  settings: { label: "Settings", href: "/settings" },
 };
 
 /**
- * Which console pages each office role sees. This only shapes the menu: the API decides what each
- * role may actually read or change, so a hidden page is never the only protection.
+ * Which console pages each office role sees, in menu order; the first is the role's home page.
+ * This only shapes the menu: the API decides what each role may actually read or change.
  */
 export const ROLE_NAV: Record<Exclude<Role, "reelmaker">, NavKey[]> = {
-  admin: ["dashboard", "jobs", "assign", "calendar", "review", "team", "payments", "contacts", "users", "settings"],
+  admin: ["dashboard", "jobs", "calendar", "assign", "payments", "review", "team", "contacts", "users", "settings"],
   sales: ["jobs", "contacts", "calendar", "payments"],
   ops: ["assign", "calendar", "review", "team", "jobs"],
   accounts: ["payments"],
 };
 
-/** The menu for a role, always in NAV order so each group heading appears once. */
-export const menuFor = (role: Exclude<Role, "reelmaker">): NavKey[] =>
-  (Object.keys(NAV) as NavKey[]).filter((k) => ROLE_NAV[role].includes(k));
+export const menuFor = (role: Exclude<Role, "reelmaker">): NavKey[] => ROLE_NAV[role];
 
 export const homeFor = (role: Role): string => (role === "reelmaker" ? "/m" : NAV[ROLE_NAV[role][0]].href);
 

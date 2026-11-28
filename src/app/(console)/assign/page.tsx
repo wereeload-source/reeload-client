@@ -1,7 +1,8 @@
 import { CalendarOff, Hourglass } from "lucide-react";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Chip, Empty, Panel } from "@/components/ui";
-import { day, time } from "@/lib/format";
+import { Cell, DataTable, Row } from "@/components/data-table";
+import { PageBar } from "@/components/page-bar";
+import { Panel } from "@/components/ui";
+import { day, dayTime } from "@/lib/format";
 import { api, requirePage } from "@/lib/session";
 import type { AssignQueue, LeaveRow, Reelmaker } from "@/lib/types";
 import { AssignBoard } from "./board";
@@ -18,46 +19,50 @@ export default async function AssignPage() {
 
   return (
     <>
-      <PageBar title="Assign shoots">
-        {queue.flagged > 0 && <Chip tone="rec">{queue.flagged} starting soon</Chip>}
+      <PageBar title="Unassigned jobs" note="Prices are hidden for Operations. Overlapping bookings are refused by the system.">
         <AddLeave reelmakers={reelmakers} />
       </PageBar>
-      <Pane>
-        <AssignBoard jobs={queue.unassigned} />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Waiting for the reelmaker to reply" icon={Hourglass} flush>
-            {queue.awaiting_reply.length ? (
-              <table className="tbl">
-                <tbody>
-                  {queue.awaiting_reply.map((w) => (
-                    <tr key={w.assignment_id}>
-                      <td className="text-mute">{w.code}</td>
-                      <td><b>{w.client_name}</b><div className="text-[13px] text-mute">{day(w.starts_at)} · {time(w.starts_at)}</div></td>
-                      <td>{w.reelmaker}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : <Empty>No one to chase.</Empty>}
-          </Panel>
-          <Panel title="Upcoming leave" icon={CalendarOff} flush>
-            {leave.length ? (
-              <table className="tbl">
-                <tbody>
-                  {leave.map((l) => (
-                    <tr key={l.id}>
-                      <td>{l.reelmaker_name ?? nameOf(l.reelmaker_id)}</td>
-                      <td>{day(l.starts_at)} – {day(new Date(new Date(l.ends_at).getTime() - 1).toISOString())}</td>
-                      <td className="text-mute">{l.note}</td>
-                      <td className="num"><RemoveLeave id={l.id} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : <Empty>No leave booked.</Empty>}
-          </Panel>
-        </div>
-      </Pane>
+
+      <AssignBoard jobs={queue.unassigned} />
+
+      <div className="flex flex-wrap gap-4">
+        <Panel title="Waiting for the reelmaker to reply" icon={Hourglass} className="flex-[1_1_420px]">
+          <DataTable
+            label="Waiting for a reply"
+            minWidth={420}
+            isEmpty={!queue.awaiting_reply.length}
+            empty="No one to chase."
+            columns={[{ label: "Job" }, { label: "Client" }, { label: "When" }, { label: "Reelmaker" }]}
+          >
+            {queue.awaiting_reply.map((w) => (
+              <Row key={w.assignment_id} href={`/jobs/${w.id}`}>
+                <Cell className="font-mono text-[13px] whitespace-nowrap text-mute">{w.code}</Cell>
+                <Cell className="font-semibold">{w.client_name}</Cell>
+                <Cell className="whitespace-nowrap">{dayTime(w.starts_at)}</Cell>
+                <Cell>{w.reelmaker}</Cell>
+              </Row>
+            ))}
+          </DataTable>
+        </Panel>
+        <Panel title="Upcoming leave" icon={CalendarOff} className="flex-[1_1_420px]">
+          <DataTable
+            label="Upcoming leave"
+            minWidth={420}
+            isEmpty={!leave.length}
+            empty="No leave booked."
+            columns={[{ label: "Reelmaker" }, { label: "Days" }, { label: "Note" }, { label: "Remove", hidden: true, align: "end" }]}
+          >
+            {leave.map((l) => (
+              <Row key={l.id}>
+                <Cell className="font-medium">{l.reelmaker_name ?? nameOf(l.reelmaker_id)}</Cell>
+                <Cell className="whitespace-nowrap">{day(l.starts_at)} – {day(new Date(new Date(l.ends_at).getTime() - 1).toISOString())}</Cell>
+                <Cell className="text-mute">{l.note}</Cell>
+                <Cell className="text-right"><RemoveLeave id={l.id} /></Cell>
+              </Row>
+            ))}
+          </DataTable>
+        </Panel>
+      </div>
     </>
   );
 }

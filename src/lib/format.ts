@@ -37,3 +37,22 @@ export const fileSize = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` 
 /** "2026-12-03" + "09:30" in Indian time -> ISO instant with offset, or null if either is missing. */
 export const istInstant = (date: string, hhmm: string): string | null =>
   /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(hhmm) ? `${date}T${hhmm}:00+05:30` : null;
+
+/** "09:30–11:00" for a shoot window. */
+export const window_ = (iso: string | null | undefined, minutes: number | null | undefined) =>
+  iso ? `${time(iso)}–${time(new Date(new Date(iso).getTime() + (minutes ?? 0) * 60_000).toISOString())}` : "—";
+
+/** "in 11 h" / "in 4 days" until a start time, as the mockup flags unassigned jobs. */
+export const startsIn = (hoursLeft: number | null | undefined) => {
+  if (hoursLeft === null || hoursLeft === undefined) return "no date";
+  if (hoursLeft < 0) return "started";
+  if (hoursLeft < 48) return `in ${Math.max(1, Math.round(hoursLeft))} h`;
+  return `in ${Math.round(hoursLeft / 24)} days`;
+};
+
+/** "Saturday, 28 November 2026" in Indian time. */
+export const fullDay = (d: Date = new Date()) =>
+  d.toLocaleDateString("en-IN", { timeZone: TZ, weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+/** "Sat, 28 November · 10:30" for a start time. */
+export const dayTime = (iso: string | null | undefined) => (iso ? `${longDay(iso)} · ${time(iso)}` : "No date yet");

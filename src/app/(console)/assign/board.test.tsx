@@ -24,15 +24,16 @@ describe("AssignBoard", () => {
     vi.mocked(apiClient.post).mockResolvedValue({});
     render(<AssignBoard jobs={[job("j1", "RL-1001", "Asha Films")]} />);
 
-    expect(screen.getByText("Starts soon")).toBeInTheDocument();
-    const list = await screen.findByRole("radiogroup");
+    expect(screen.getByText("in 10 h")).toBeInTheDocument();
+    expect(screen.getByText("Inside 48 hours")).toBeInTheDocument();
+    const list = await screen.findByRole("radiogroup", { name: "Choose a reelmaker" });
     expect(apiClient.get).toHaveBeenCalledWith("/jobs/j1/candidates");
     expect(within(list).getByRole("radio", { name: /Meera/ })).toBeDisabled();
 
-    const assign = screen.getByRole("button", { name: /Assign and block calendar/ });
-    expect(assign).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Assign" })).toBeDisabled();
     await userEvent.click(within(list).getByRole("radio", { name: /Ravi/ }));
-    await userEvent.click(assign);
+    expect(screen.getByRole("status")).toHaveTextContent("No conflict found for Ravi");
+    await userEvent.click(screen.getByRole("button", { name: "Assign Ravi" }));
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith("/jobs/j1/assign", { reelmaker_id: "r1" }));
   });
 
@@ -41,7 +42,7 @@ describe("AssignBoard", () => {
     vi.mocked(apiClient.post).mockRejectedValue(new Error("Ravi already has a shoot at that time"));
     render(<AssignBoard jobs={[job("j1", "RL-1001", "Asha Films")]} />);
     await userEvent.click(await screen.findByRole("radio", { name: /Ravi/ }));
-    await userEvent.click(screen.getByRole("button", { name: /Assign and block calendar/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Assign Ravi" }));
     expect(await screen.findByText("Ravi already has a shoot at that time")).toBeInTheDocument();
   });
 

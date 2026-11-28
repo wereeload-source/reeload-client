@@ -4,8 +4,9 @@ import { Checkbox, Description, Input, Label, ListBox, Select, TextArea, TextFie
 type Common = { name: string; label: string; description?: string; isRequired?: boolean; className?: string };
 
 export function TextInput({
-  name, label, description, isRequired, className, type = "text", defaultValue, value, onChange, placeholder, inputMode, autoComplete, minLength, maxLength, min, max, step,
+  name, label, description, isRequired, className, inputClassName, type = "text", defaultValue, value, onChange, placeholder, inputMode, autoComplete, minLength, maxLength, min, max, step,
 }: Common & {
+  inputClassName?: string;
   type?: "text" | "email" | "password" | "tel" | "url" | "number" | "date" | "time" | "datetime-local";
   defaultValue?: string; value?: string; onChange?: (v: string) => void; placeholder?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"]; autoComplete?: string;
@@ -14,7 +15,7 @@ export function TextInput({
   return (
     <TextField name={name} type={type} isRequired={isRequired} defaultValue={defaultValue} value={value} onChange={onChange} className={className ?? "w-full"}>
       <Label>{label}</Label>
-      <Input placeholder={placeholder} inputMode={inputMode} autoComplete={autoComplete} minLength={minLength} maxLength={maxLength} min={min} max={max} step={step} />
+      <Input className={inputClassName} placeholder={placeholder} inputMode={inputMode} autoComplete={autoComplete} minLength={minLength} maxLength={maxLength} min={min} max={max} step={step} />
       {description && <Description>{description}</Description>}
     </TextField>
   );

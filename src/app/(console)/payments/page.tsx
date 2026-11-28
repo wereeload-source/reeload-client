@@ -1,13 +1,16 @@
-import { BadgeIndianRupee, CheckCircle2, FileDown, Handshake, Search, Wallet } from "lucide-react";
-import Link from "next/link";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Empty, Kpi, Panel, StatusChip } from "@/components/ui";
-import { inr, num } from "@/lib/format";
+import { FileDown, Wallet } from "lucide-react";
+import { Card } from "@heroui/react";
+import { Cell, DataTable, Row } from "@/components/data-table";
+import { LinkButton } from "@/components/link-button";
+import { PageBar } from "@/components/page-bar";
+import { Chip, Empty } from "@/components/ui";
+import { day, inr, num } from "@/lib/format";
 import { api, requirePage } from "@/lib/session";
-import type { Ledger } from "@/lib/types";
+import { METHOD_LABEL, type JobPayments, type Ledger } from "@/lib/types";
+import { JobPicker, LedgerSearch } from "./picker";
 import { RecordPayment } from "./record";
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ q?: string; owing?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ q?: string; owing?: string; job?: string }> }) {
   const { me } = await requirePage("payments");
   const sp = await searchParams;
   const q = (sp.q ?? "").slice(0, 80);
@@ -18,63 +21,95 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const ledger = await api.get<Ledger>(`/ledger?${qs}`);
   const rows = ledger.items.filter((r) => r.agreed_amount !== null);
   const canRecord = me.role === "accounts" || me.role === "admin";
-  const t = ledger.totals;
+  const selectedId = rows.find((r) => r.id === sp.job)?.id ?? rows[0]?.id;
+  const detail = selectedId ? await api.get<JobPayments>(`/jobs/${encodeURIComponent(selectedId)}/payments`) : null;
 
   return (
     <>
-      <PageBar title="Payments">
+      <PageBar title="Payment ledger" note="UPI, bank transfer or cash. No online gateway.">
         {canRecord && (
-          // A plain link: the browser downloads the CSV through the signed-in proxy.
-          <a href={`/api/proxy/ledger.csv?${qs}`} className="button button--secondary button--sm" download>
+          <LinkButton href={`/api/proxy/ledger.csv?${qs}`} variant="outline" size="sm" download>
             <FileDown aria-hidden className="size-4" /> Export CSV
-          </a>
+          </LinkButton>
         )}
       </PageBar>
-      <Pane>
-        <div className="kpis">
-          <Kpi icon={Handshake} label="Agreed" value={inr(t.total)} note={`${t.jobs} jobs`} />
-          <Kpi icon={Wallet} label="Received" value={inr(t.received)} />
-          <Kpi icon={BadgeIndianRupee} label="Balance due" value={inr(t.outstanding)} alert={t.outstanding > 0} />
-          <Kpi icon={CheckCircle2} label="Fully paid" value={rows.filter((r) => num(r.balance) <= 0).length} />
-        </div>
-        <form className="flex flex-wrap items-center gap-2" role="search">
-          <label className="relative">
-            <span className="sr-only">Search</span>
-            <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-mute" />
-            <input name="q" defaultValue={q} placeholder="Client, city or RL-1001" maxLength={80} className="field w-64 pl-8" />
-          </label>
-          <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" name="owing" value="1" defaultChecked={owing} className="accent-rec" /> Only jobs that owe money</label>
-          <button className="button button--secondary button--sm">Apply</button>
-        </form>
-        <Panel flush>
-          {rows.length ? (
-            <table className="tbl">
-              <thead><tr><th>Job</th><th>Client</th><th>Status</th><th className="num">Total</th><th className="num">Advance</th><th className="num">Received</th><th className="num">Balance</th>{canRecord && <th />}</tr></thead>
-              <tbody>
-                {rows.map((r) => {
+
+      <div className="flex flex-wrap items-start gap-5">
+        <section aria-label="Jobs" className="flex max-w-[400px] min-w-[280px] flex-[1_1_320px] flex-col gap-3">
+          <LedgerSearch q={q} owing={owing} />
+          <Card className="p-3">
+            {rows.length ? (
+              <JobPicker
+                selected={selectedId ?? null}
+                jobs={rows.map((r) => {
                   const balance = num(r.balance);
-                  return (
-                    <tr key={r.id}>
-                      <td className="text-mute">{me.role === "accounts" ? r.code : <Link className="text-rec hover:underline" href={`/jobs/${r.id}`}>{r.code}</Link>}</td>
-                      <td><b>{r.client_name}</b><div className="text-[12.5px] text-mute">{r.city}</div></td>
-                      <td><StatusChip status={r.status} /></td>
-                      <td className="num">{inr(num(r.agreed_amount) + num(r.approved_changes))}</td>
-                      <td className="num">{inr(r.advance)}</td>
-                      <td className="num">{inr(r.received)}</td>
-                      <td className={`num font-bold ${balance <= 0 ? "text-ok" : ""}`}>{balance > 0 ? inr(balance) : "Paid"}</td>
-                      {canRecord && (
-                        <td className="num">
-                          {balance > 0 && !["lead", "draft", "cancelled"].includes(r.status) && <RecordPayment jobId={r.id} code={r.code} balance={balance} />}
-                        </td>
-                      )}
-                    </tr>
-                  );
+                  return { id: r.id, client: r.client_name, code: r.code, balance: inr(Math.max(balance, 0)), paid: balance <= 0 };
                 })}
-              </tbody>
-            </table>
-          ) : <Empty icon={Wallet}>No jobs with an agreed amount match.</Empty>}
-        </Panel>
-      </Pane>
+              />
+            ) : (
+              <Empty icon={Wallet}>No jobs with an agreed amount match.</Empty>
+            )}
+          </Card>
+        </section>
+
+        {detail && (
+          <section aria-label="Ledger" className="flex min-w-0 flex-[2_1_560px] flex-col gap-4">
+            <Card className="gap-4 px-6 py-[22px]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="m-0 text-[22px] font-semibold">
+                  {detail.summary.client_name} <span className="font-mono text-sm font-normal text-mute">{detail.summary.code}</span>
+                </h2>
+                {num(detail.summary.balance) <= 0 ? <Chip tone="ok">Paid</Chip> : <Chip tone="warn">Balance due</Chip>}
+              </div>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+                {[
+                  { label: "Total agreed", value: inr(detail.summary.agreed_amount), cls: "bg-sub text-ink" },
+                  { label: "Approved changes", value: `${num(detail.summary.approved_changes) >= 0 ? "+" : ""}${inr(detail.summary.approved_changes ?? 0)}`, cls: "bg-sub text-ink" },
+                  { label: "Received", value: inr(detail.summary.received), cls: "bg-oks text-ok" },
+                  {
+                    label: "Balance",
+                    value: inr(Math.max(num(detail.summary.balance), 0)),
+                    cls: num(detail.summary.balance) <= 0 ? "bg-oks text-ok" : "bg-warns text-warn",
+                  },
+                ].map((t) => (
+                  <div key={t.label} className={`rounded-[10px] p-3.5 ${t.cls}`}>
+                    <div className="text-xs font-semibold text-mute2">{t.label}</div>
+                    <div className="mt-1 font-mono text-xl font-medium">{t.value}</div>
+                  </div>
+                ))}
+              </div>
+              <DataTable
+                label="Payments"
+                minWidth={480}
+                isEmpty={!detail.payments.length}
+                empty="No payments recorded yet."
+                columns={[{ label: "Date" }, { label: "Type" }, { label: "Reference" }, { label: "Amount", align: "end" }, { label: "Receipt", hidden: true, align: "end" }]}
+              >
+                {detail.payments.map((p, i) => (
+                  <Row key={p.id}>
+                    <Cell className="font-mono text-[13px] whitespace-nowrap">{day(p.received_at)}</Cell>
+                    <Cell>{p.is_advance ? "Advance" : i === detail.payments.length - 1 && num(detail.summary.balance) <= 0 ? "Balance" : "Part payment"} · {METHOD_LABEL[p.method]}</Cell>
+                    <Cell className="font-mono text-[13px] text-mute2">{p.reference ?? "—"}</Cell>
+                    <Cell className="text-right font-mono">{inr(p.amount)}</Cell>
+                    <Cell className="text-right">
+                      <LinkButton href={`/payments/receipt/${p.id}`} variant="ghost" size="sm" className="text-info">Print receipt</LinkButton>
+                    </Cell>
+                  </Row>
+                ))}
+              </DataTable>
+            </Card>
+
+            {canRecord && (
+              <RecordPayment
+                jobId={detail.summary.id}
+                balance={Math.max(num(detail.summary.balance), 0)}
+                owed={num(detail.summary.agreed_amount) + num(detail.summary.approved_changes)}
+                canPay={!["lead", "draft", "cancelled"].includes(detail.summary.status)}
+              />
+            )}
+          </section>
+        )}
+      </div>
     </>
   );
 }

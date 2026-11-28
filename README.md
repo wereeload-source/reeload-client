@@ -6,7 +6,9 @@ Backend (NestJS API on Postgres): [`reeload-server`](https://github.com/wereeloa
 
 ## Stack
 
-Next.js 16 (App Router, React 19) · [HeroUI v3](https://heroui.com) components · [Lucide](https://lucide.dev) icons · Tailwind CSS 4 · Vitest + Testing Library · direct-to-R2 resumable uploads · fonts Geist and Funnel Display.
+Next.js 16 (App Router, React 19) · [HeroUI v3](https://heroui.com) components for every control (buttons, fields, tables, cards, chips, tabs, dialogs, toasts) · [Lucide](https://lucide.dev) icons · Tailwind CSS 4 · Vitest + Testing Library · direct-to-R2 resumable uploads.
+
+The look follows the approved UI mockups ("ReelOps – UI Mockups"): a light console on a grey page, a near-black menu (sidebar for Admin, top bar for Sales, Operations and Accounts), white cards, one red-orange accent (`#C93A06`), Space Grotesk headings, Inter text and JetBrains Mono for times, codes and money. Colours live in `src/app/globals.css` and are mapped onto HeroUI's theme tokens there.
 
 ## Getting started
 
@@ -54,7 +56,7 @@ src/
     d/[token]/                 public download page
     login/                     sign-in page and sign-in / sign-out server actions
     api/proxy/[...path]/       browser → API bridge that adds the token from the httpOnly cookie
-  components/                  shared UI on HeroUI: fields, FormDialog, ActionButton, chips, panels
+  components/                  shared UI on HeroUI: fields, DataTable, FilterBar, FormDialog, ActionButton, chips, cards
   lib/
     session.ts                 server-side API calls (pages, server actions); requireProfile / requirePage
     api-client.ts              browser calls through /api/proxy

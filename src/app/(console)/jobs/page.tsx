@@ -1,9 +1,10 @@
-import { Clapperboard, Plus, Search } from "lucide-react";
-import Link from "next/link";
+import { Plus } from "lucide-react";
+import { Cell, DataTable, Row, type Column } from "@/components/data-table";
+import { FilterBar } from "@/components/filter-bar";
 import { LinkButton } from "@/components/link-button";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Empty, Panel, StatusChip } from "@/components/ui";
-import { day, inr, time } from "@/lib/format";
+import { PageBar } from "@/components/page-bar";
+import { Panel, StatusChip } from "@/components/ui";
+import { dayTime, inr, statusLabel } from "@/lib/format";
 import { api, requirePage } from "@/lib/session";
 import { liveAssignment, type Job, type Paged } from "@/lib/types";
 
@@ -20,64 +21,43 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const { items: jobs, total } = await api.get<Paged<Job>>(`/jobs?${qs}`);
   const money = me.role === "admin" || me.role === "sales";
 
+  const columns: Column[] = [{ label: "Job" }, { label: "Client" }, { label: "City" }, { label: "Shoot" }, { label: "Reelmaker" }, { label: "Status" }];
+  if (money) columns.push({ label: "Agreed", align: "end" });
+
   return (
     <>
-      <PageBar title="Jobs">
+      <PageBar title="Jobs" note={money ? undefined : "Prices are hidden for Operations."}>
         {money && (
           <LinkButton href="/jobs/new">
             <Plus aria-hidden className="size-4" /> New job
           </LinkButton>
         )}
       </PageBar>
-      <Pane>
-        <form className="box flex flex-wrap items-center gap-1.5" role="search">
-          {FILTERS.map((f) => (
-            <Link
-              key={f}
-              href={`/jobs?s=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-              aria-current={s === f ? "true" : undefined}
-              className={`rounded-full border px-3 py-1 text-[13px] font-semibold capitalize ${s === f ? "border-ink bg-ink text-paper" : "border-line bg-paper text-mute"}`}
-            >
-              {f}
-            </Link>
+      <FilterBar
+        filters={FILTERS.map((f) => ({ id: f, label: f === "all" ? "All" : statusLabel(f) }))}
+        current={s}
+        q={q}
+        placeholder="Client, phone, city or RL-1001"
+      />
+      <Panel>
+        <DataTable label="Jobs" minWidth={760} isEmpty={!jobs.length} empty="No jobs match." columns={columns}>
+          {jobs.map((j) => (
+            <Row key={j.id} href={`/jobs/${j.id}`}>
+              <Cell className="font-mono text-[13px] font-medium whitespace-nowrap text-rec">{j.code}</Cell>
+              <Cell>
+                <div className="font-semibold">{j.client_name}</div>
+                <div className="font-mono text-xs text-mute">{j.client_phone}</div>
+              </Cell>
+              <Cell>{j.city}</Cell>
+              <Cell className="whitespace-nowrap">{j.starts_at ? dayTime(j.starts_at) : <span className="text-mute">Not set</span>}</Cell>
+              <Cell>{liveAssignment(j)?.full_name ?? <span className="text-mute">—</span>}</Cell>
+              <Cell><StatusChip status={j.status} /></Cell>
+              {money ? <Cell className="text-right font-mono">{inr(j.agreed_amount)}</Cell> : null}
+            </Row>
           ))}
-          <span className="flex-1" />
-          <input type="hidden" name="s" value={s} />
-          <label className="relative">
-            <span className="sr-only">Search jobs</span>
-            <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-mute" />
-            <input name="q" defaultValue={q} placeholder="Client, phone, city or RL-1001" maxLength={80} className="field w-64 pl-8" />
-          </label>
-        </form>
-        <Panel flush>
-          {jobs.length ? (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Job</th><th>Client</th><th>City</th><th>Shoot</th><th>Reelmaker</th><th>Status</th>
-                  {money && <th className="num">Agreed</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((j) => (
-                  <tr key={j.id} className="hover:bg-sub">
-                    <td className="whitespace-nowrap"><Link href={`/jobs/${j.id}`} className="font-semibold text-rec hover:underline">{j.code}</Link></td>
-                    <td><b>{j.client_name}</b><div className="font-mono text-[12.5px] text-mute">{j.client_phone}</div></td>
-                    <td>{j.city}</td>
-                    <td className="whitespace-nowrap">{j.starts_at ? `${day(j.starts_at)} · ${time(j.starts_at)}` : <span className="text-mute">Not set</span>}</td>
-                    <td>{liveAssignment(j)?.full_name ?? <span className="text-mute">—</span>}</td>
-                    <td><StatusChip status={j.status} /></td>
-                    {money && <td className="num">{inr(j.agreed_amount)}</td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <Empty icon={Clapperboard}>No jobs match.</Empty>
-          )}
-          {total > jobs.length && <p className="px-2 py-2 text-[13px] text-mute">Showing {jobs.length} of {total}. Narrow the search to see the rest.</p>}
-        </Panel>
-      </Pane>
+        </DataTable>
+        {total > jobs.length && <p className="m-0 text-[13px] text-mute">Showing {jobs.length} of {total}. Narrow the search to see the rest.</p>}
+      </Panel>
     </>
   );
 }

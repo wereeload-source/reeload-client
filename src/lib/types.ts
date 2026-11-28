@@ -183,6 +183,31 @@ export interface LedgerRow {
   balance: Money;
 }
 
+export interface PaymentRow {
+  id: string;
+  amount: Money;
+  method: PaymentMethod;
+  reference: string | null;
+  is_advance: boolean;
+  received_at: string;
+  recorded_by_name: string | null;
+}
+
+export interface JobPayments {
+  summary: LedgerRow;
+  payments: PaymentRow[];
+}
+
+export interface Receipt {
+  receipt_no: string;
+  issued_at: string;
+  client_name: string;
+  job_code: string;
+  city: string;
+  payment: { amount: Money; method: PaymentMethod; reference: string | null; is_advance: boolean; received_at: string; received_by: string | null };
+  job_totals: { agreed_amount: Money; approved_changes: Money; received: Money; balance: Money };
+}
+
 export interface Ledger extends Paged<LedgerRow> {
   totals: { jobs: number; total: number; advance: number; received: number; balance: number; outstanding: number };
 }

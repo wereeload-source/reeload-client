@@ -1,10 +1,10 @@
-import { ChevronLeft, Map as MapIcon } from "lucide-react";
-import Link from "next/link";
+import { Card } from "@heroui/react";
 import { notFound } from "next/navigation";
-import { day, time } from "@/lib/format";
+import { isToday, longDay, window_ } from "@/lib/format";
 import { ApiError, api, requireProfile } from "@/lib/session";
 import type { CheckinState, Shoot, UploadRow } from "@/lib/types";
-import { DropOut } from "../../respond";
+import { MHeader, MMain } from "../../header";
+import { DropOut, Respond } from "../../respond";
 import { ShootFlow, type Stage } from "./flow";
 
 const STAGE: Record<CheckinState["step"], Stage> = { not_started: "start", code_sent: "otp", photos: "photos", done: "upload" };
@@ -22,35 +22,43 @@ export default async function ShootPage({ params }: { params: Promise<{ id: stri
   const [checkin, uploads] = accepted
     ? await Promise.all([api.get<CheckinState>(`/me/shoots/${id}/checkin`), api.get<UploadRow[]>(`/jobs/${id}/uploads`)])
     : [null, [] as UploadRow[]];
-  const end = shoot.starts_at && shoot.duration_minutes ? new Date(new Date(shoot.starts_at).getTime() + shoot.duration_minutes * 60_000).toISOString() : null;
   const mapHref = shoot.maps_url ?? (shoot.address ? `https://maps.google.com/?q=${encodeURIComponent(`${shoot.address}, ${shoot.city}`)}` : null);
+  const when = `${isToday(shoot.starts_at) ? "Today" : longDay(shoot.starts_at)} · ${window_(shoot.starts_at, shoot.duration_minutes)}`;
+
+  if (!accepted || !checkin) {
+    return (
+      <>
+        <MHeader title={shoot.client_name} subtitle="New request" back="/m" />
+        <MMain>
+          <Card className="gap-3 p-4">
+            <div className="font-mono text-[13px]">{when}</div>
+            <div className="text-sm text-mute2">{shoot.address ? `${shoot.address}, ${shoot.city}` : shoot.city}</div>
+            {shoot.brief && <div className="rounded-[10px] bg-sub p-3 text-sm"><strong>Brief.</strong> {shoot.brief}</div>}
+            {shoot.assignment_status === "pending" ? <Respond jobId={id} /> : <p className="m-0 text-sm text-mute">This shoot is no longer yours.</p>}
+          </Card>
+        </MMain>
+      </>
+    );
+  }
 
   return (
-    <>
-      <div className="flex items-center gap-2.5 py-2">
-        <Link href="/m" aria-label="Back to my shoots" className="grid size-9 place-items-center rounded-full bg-sub"><ChevronLeft aria-hidden className="size-5" /></Link>
-        <h1 className="font-display text-xl font-bold tracking-tight">{shoot.client_name}</h1>
-      </div>
-      <div className="mcard">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1.5 text-sm">
-          <dt className="text-mute">When</dt><dd className="font-medium">{day(shoot.starts_at)}, {time(shoot.starts_at)} – {time(end)}</dd>
-          <dt className="text-mute">Where</dt><dd className="font-medium">{shoot.address ?? shoot.city}</dd>
-          {shoot.onsite_contact_name && <><dt className="text-mute">On site</dt><dd className="font-medium">{shoot.onsite_contact_name} · <a className="font-mono" href={`tel:${shoot.onsite_contact_phone}`}>{shoot.onsite_contact_phone}</a></dd></>}
-          <dt className="text-mute">Job</dt><dd className="font-medium">{shoot.code}</dd>
-        </dl>
-        {mapHref && (
-          <a href={mapHref} target="_blank" rel="noopener noreferrer" className="mbtn mbtn-ghost mt-3 min-h-11"><MapIcon aria-hidden className="size-4" /> Open in Google Maps</a>
-        )}
-      </div>
-      {shoot.brief && <div className="mcard"><b>Brief</b><p className="mt-1.5 whitespace-pre-line text-sm">{shoot.brief}</p></div>}
-      {accepted && checkin ? (
-        <>
-          <ShootFlow jobId={id} stage={STAGE[checkin.step]} sendsLeft={checkin.sends_left} resendIn={checkin.resend_in_seconds} files={uploads} />
-          {checkin.step === "not_started" && <div className="mt-4 text-center"><DropOut jobId={id} /></div>}
-        </>
-      ) : (
-        <p className="mcard text-sm text-mute">Accept this shoot on the My shoots page to start the check-in.</p>
-      )}
-    </>
+    <ShootFlow
+      jobId={id}
+      shoot={{
+        client: shoot.client_name,
+        code: shoot.code,
+        when,
+        address: shoot.address ? `${shoot.address}, ${shoot.city}` : shoot.city,
+        mapHref,
+        contactName: shoot.onsite_contact_name,
+        contactPhone: shoot.onsite_contact_phone,
+        brief: shoot.brief,
+      }}
+      stage={STAGE[checkin.step]}
+      sendsLeft={checkin.sends_left}
+      resendIn={checkin.resend_in_seconds}
+      files={uploads}
+      dropOut={checkin.step === "not_started" ? <DropOut jobId={id} /> : undefined}
+    />
   );
 }

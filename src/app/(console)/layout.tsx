@@ -1,47 +1,72 @@
+import { Button } from "@heroui/react";
 import { LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
-import { Avatar } from "@/components/ui";
+import { Brand } from "@/components/brand";
 import { menuFor } from "@/lib/nav";
 import { api, requireProfile } from "@/lib/session";
 import { ROLE_LABEL, type Notifications } from "@/lib/types";
-import { Sidebar } from "./sidebar";
+import { Sidebar, TopNav } from "./sidebar";
+
+const ROLE_NOTE: Record<string, string> = {
+  admin: "Full access · all prices",
+  sales: "Clients, jobs and money",
+  ops: "Prices hidden",
+  accounts: "Payments and receipts",
+};
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const { me } = await requireProfile();
   if (me.role === "reelmaker") redirect("/m");
   const items = menuFor(me.role);
-  // The bell count is a nice-to-have: a failure here must not take the whole console down.
+  // The unread count is a nice-to-have: a failure here must not take the whole console down.
   const unread = await api.get<Notifications>("/notifications?unread=true&limit=1").then((n) => n.unread, () => 0);
 
-  return (
-    <div className="grid min-h-dvh grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="sticky top-0 flex h-dvh flex-col gap-1 bg-side px-3 py-4 text-sideink">
-        <div className="flex items-center gap-2.5 px-2 pb-3.5 font-display text-[19px] font-bold tracking-tight text-white">
-          {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG */}
-          <img src="/logo.svg" alt="" width={30} height={30} className="rounded-[9px] shadow-[0_0_0_3px_rgba(223,59,43,.18)]" /> Reeload
-        </div>
-        <Sidebar items={items} badges={{}} />
-        <div className="mt-auto border-t border-[#22252a] pt-3">
-          <div className="mb-1.5 ml-1 flex items-center justify-between text-[13px] text-[#5f646d]">
-            Signed in as
-            {unread > 0 && <span className="rounded-full bg-rec px-[7px] text-xs font-semibold text-white" title="Unread notices">{unread}</span>}
-          </div>
-          <div className="flex items-center gap-2 px-1">
-            <Avatar name={me.full_name} size={28} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-white">{me.full_name}</div>
-              <div className="text-xs text-sidemute">{ROLE_LABEL[me.role]}</div>
+  const signOutButton = (dark: boolean) => (
+    <form action={signOut}>
+      <Button type="submit" size="sm" variant="ghost" className={dark ? "text-sidemute2 hover:bg-side2 hover:text-white" : ""}>
+        <LogOut aria-hidden className="size-4" /> Sign out
+      </Button>
+    </form>
+  );
+
+  // Admin: the dashboard mockup's left menu. Everyone else: the top bar from their mockups.
+  if (me.role === "admin") {
+    return (
+      <div className="flex min-h-dvh flex-col bg-bg md:flex-row">
+        <aside
+          aria-label="Main"
+          className="flex flex-col gap-7 bg-side print:hidden px-4 py-6 text-sideink md:sticky md:top-0 md:h-dvh md:w-[248px] md:flex-none md:overflow-y-auto"
+        >
+          <Brand />
+          <Sidebar items={items} badges={{}} />
+          <div className="mt-auto flex flex-col gap-1 rounded-[10px] bg-side3 p-3">
+            <div className="flex items-center justify-between text-xs text-sidemute2">
+              Signed in as
+              {unread > 0 && <span className="rounded-full bg-rec px-2 text-xs font-semibold text-white" title="Unread notices">{unread}</span>}
             </div>
+            <div className="text-sm font-semibold">{me.full_name} ({ROLE_LABEL[me.role]})</div>
+            <div className="text-xs text-sidemute2">{ROLE_NOTE[me.role]}</div>
+            <div className="-ml-2 mt-1">{signOutButton(true)}</div>
           </div>
-          <form action={signOut}>
-            <button className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-sidemute hover:bg-side2 hover:text-white">
-              <LogOut aria-hidden className="size-3.5" /> Sign out
-            </button>
-          </form>
+        </aside>
+        <main className="flex min-w-0 flex-1 flex-col gap-6 px-8 py-7 max-sm:px-4">{children}</main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-dvh bg-bg">
+      <header className="flex flex-wrap items-center gap-5 bg-side print:hidden px-8 py-3 text-sideink max-sm:px-4">
+        <Brand small />
+        <TopNav items={items} />
+        <div className="ml-auto flex items-center gap-2 text-[13px] text-sidemute2">
+          {unread > 0 && <span className="rounded-full bg-rec px-2 text-xs font-semibold text-white" title="Unread notices">{unread}</span>}
+          <span>{me.full_name} · {ROLE_LABEL[me.role]}</span>
+          {signOutButton(true)}
         </div>
-      </aside>
-      <main className="flex min-w-0 flex-col bg-sub">{children}</main>
+      </header>
+      <main className="mx-auto flex max-w-[1280px] flex-col gap-5 px-8 py-7 max-sm:px-4">{children}</main>
     </div>
   );
 }
