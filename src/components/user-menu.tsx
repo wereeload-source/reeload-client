@@ -1,6 +1,6 @@
 "use client";
 import { Avatar, Button, Dropdown, Header, Label, Separator } from "@heroui/react";
-import { ChevronDown, Clock3, LogOut, Settings, UserCog, UserRound } from "lucide-react";
+import { Clock3, LogOut, Settings, UserCog, UserRound } from "lucide-react";
 import { signOutFully } from "@/components/sign-out";
 import { initials } from "@/lib/format";
 import { ROLE_LABEL, type Role } from "@/lib/types";
@@ -21,15 +21,10 @@ export function UserMenu({ me, dark }: { me: Me; dark?: boolean }) {
   const account = me.role === "reelmaker" ? "/m/account" : "/account";
   return (
     <Dropdown>
-      <Button variant="ghost" aria-label={`Account menu for ${me.full_name}`} className={`h-11 gap-2 px-1.5 ${dark ? "text-sideink hover:bg-side2 data-[pressed=true]:bg-side2 aria-expanded:bg-side2 data-[focus-visible=true]:bg-side2" : "text-ink"}`}>
+      <Button isIconOnly variant="ghost" aria-label={`Account menu for ${me.full_name}`} className={`size-11 rounded-full ${dark ? "hover:bg-side2 data-[pressed=true]:bg-side2 aria-expanded:bg-side2 data-[focus-visible=true]:bg-side2" : ""}`}>
         <Avatar size="sm" color="accent">
           <Avatar.Fallback>{initials(me.full_name)}</Avatar.Fallback>
         </Avatar>
-        <span className="hidden text-left leading-tight md:block">
-          <span className="block text-[13px] font-semibold">{me.full_name}</span>
-          <span className={`block text-xs ${dark ? "text-sidemute2" : "text-mute"}`}>{ROLE_LABEL[me.role]}</span>
-        </span>
-        <ChevronDown aria-hidden className="size-4 opacity-70" />
       </Button>
       <Dropdown.Popover placement="bottom end" className="min-w-60">
         <Dropdown.Menu
