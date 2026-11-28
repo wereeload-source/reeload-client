@@ -1,29 +1,59 @@
 "use client";
-import Link from "next/link";
+import { Link } from "@heroui/react";
 import { usePathname } from "next/navigation";
-import { NAV, NavKey } from "@/lib/types";
+import { NAV, type NavKey } from "@/lib/nav";
+import { NAV_ICON } from "./nav-icons";
 
+const isActive = (path: string, href: string) => path === href || path.startsWith(href + "/");
+
+/** Admin's left menu, as in the dashboard mockup. */
 export function Sidebar({ items, badges }: { items: NavKey[]; badges: Partial<Record<NavKey, number>> }) {
   const path = usePathname();
   return (
-    <nav className="grid gap-0.5">
-      {items.map((k, i) => {
+    <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+      {items.map((k) => {
         const n = NAV[k];
-        // Show a group heading when this item starts a new group.
-        const prev = items.slice(0, i).map((x) => NAV[x].group).filter(Boolean).at(-1);
-        const showGroup = n.group && n.group !== prev;
-        const on = path.startsWith(n.href);
+        const Icon = NAV_ICON[k];
+        const on = isActive(path, n.href);
         return (
-          <div key={k}>
-            {showGroup && <div className="px-2.5 pb-1 pt-3.5 text-xs text-[#5f646d]">{n.group}</div>}
+          <li key={k}>
             <Link
               href={n.href}
-              className={`relative flex items-center gap-2.5 rounded-[7px] px-2.5 py-[7px] font-medium ${on ? "bg-side2 text-white shadow-[inset_0_0_0_1px_#2a2d33] before:absolute before:-left-3 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r before:bg-rec" : "text-sidemute hover:bg-side2 hover:text-white"}`}
+              aria-current={on ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-3 rounded-lg px-3 py-[11px] text-sm font-medium no-underline transition-colors ${
+                on ? "bg-side2 text-white" : "text-sidemute hover:bg-side3 hover:text-white"
+              }`}
             >
-              {n.label}
-              {!!badges[k] && <span className="ml-auto rounded-full bg-rec px-[7px] text-xs font-semibold text-white">{badges[k]}</span>}
+              <Icon aria-hidden className="size-[18px]" strokeWidth={1.8} />
+              <span className="flex-1">{n.label}</span>
+              {!!badges[k] && <span className="font-mono text-xs text-[#f4b79f]">{badges[k]}</span>}
             </Link>
-          </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** The top bar menu used by Sales, Operations and Accounts (as in their mockups). */
+export function TopNav({ items }: { items: NavKey[] }) {
+  const path = usePathname();
+  return (
+    <nav aria-label="Main" className="flex flex-wrap gap-1">
+      {items.map((k) => {
+        const n = NAV[k];
+        const on = isActive(path, n.href);
+        return (
+          <Link
+            key={k}
+            href={n.href}
+            aria-current={on ? "page" : undefined}
+            className={`flex min-h-11 items-center rounded-lg px-3.5 text-sm no-underline transition-colors ${
+              on ? "bg-side2 font-semibold text-white" : "font-medium text-sidemute hover:bg-side3 hover:text-white"
+            }`}
+          >
+            {n.label}
+          </Link>
         );
       })}
     </nav>

@@ -1,117 +1,174 @@
-import { requireProfile } from "@/lib/supabase/server";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Avatar, Kpi, StatusChip, Empty } from "@/components/ui";
-import { hoursSince, inr, isToday, time } from "@/lib/format";
-import { JOB_SELECT, PIPELINE, liveAssignment as live, type Job } from "@/lib/types";
+import { ProgressBar } from "@heroui/react";
+import { Cell, DataTable, Row } from "@/components/data-table";
+import { LinkButton } from "@/components/link-button";
+import { PageBar } from "@/components/page-bar";
+import { Chip, Empty, Kpi, Kpis, Panel, StatusChip } from "@/components/ui";
+import { dayTime, fullDay, inr, istDate, num, startsIn, time, window_ } from "@/lib/format";
+import { api, requirePage } from "@/lib/session";
+import { liveAssignment, type AssignQueue, type Contacts, type Dashboard, type HoursRow, type Job, type Paged, type PriceChange } from "@/lib/types";
 import { ApprovePriceChange } from "./approve";
 
-export default async function Dashboard() {
-  const { supabase } = await requireProfile();
-  const [{ data: jobs }, { data: money }, { data: pending }, { data: hours }, { data: calls }, { data: audit }, { data: people }] = await Promise.all([
-    supabase.from("jobs").select(JOB_SELECT).order("starts_at"),
-    supabase.from("jobs_accounts").select("id, received, balance"),
-    supabase.from("price_changes").select("id, delta, reason, jobs(code, clients(name))").eq("status", "pending"),
-    supabase.from("reelmaker_hours").select("reelmaker_id, booked_hours, extra_hours"),
-    supabase.from("contact_counts_today").select("*"),
-    supabase.from("audit_log").select("id, at, action, entity, actor_id").order("at", { ascending: false }).limit(6),
-    supabase.from("profiles").select("id, full_name"),
-  ]);
-  const nameOf = (id: string | null) => (people ?? []).find((p) => p.id === id)?.full_name;
+const tomorrow = () => istDate(new Date(Date.now() + 86_400_000));
+const soft = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
 
-  const all = (jobs ?? []) as Job[];
-  const today = all.filter((j) => isToday(j.starts_at));
-  const unassigned = all.filter((j) => j.status === "confirmed");
-  const received = (money ?? []).reduce((s, m) => s + Number(m.received ?? 0), 0);
-  const outstanding = (money ?? []).reduce((s, m) => s + Math.max(0, Number(m.balance ?? 0)), 0);
-  const maxH = Math.max(1, ...(hours ?? []).map((h) => Number(h.booked_hours) + Number(h.extra_hours)));
+export default async function DashboardPage() {
+  await requirePage("dashboard");
+  const today = istDate();
+  const todayRange = new URLSearchParams({ from: `${today}T00:00:00+05:30`, to: `${tomorrow()}T00:00:00+05:30`, limit: "50" });
+  const [d, pending, todays, queue, hrs, contacts] = await Promise.all([
+    api.get<Dashboard>("/dashboard"),
+    soft(api.get<PriceChange[]>("/price-changes?status=pending"), []),
+    soft(api.get<Paged<Job>>(`/jobs?${todayRange}`), { items: [], total: 0 }),
+    soft(api.get<AssignQueue>("/assign/queue"), { unassigned: [], flagged: 0, awaiting_reply: [] }),
+    soft(api.get<{ month: string; items: HoursRow[] }>(`/hours?month=${today.slice(0, 7)}`), { month: "", items: [] }),
+    soft(api.get<Contacts>(`/contacts?date=${today}`), { date: today, counts: [], items: [] }),
+  ]);
+  const a = d.needs_attention;
+  const shoots = todays.items
+    .filter((j) => j.starts_at && j.status !== "cancelled")
+    .sort((x, y) => x.starts_at!.localeCompare(y.starts_at!));
+  const accepted = shoots.filter((j) => liveAssignment(j)?.status === "accepted").length;
+  const awaiting = shoots.filter((j) => liveAssignment(j)?.status === "pending").length;
+  const hours = [...hrs.items].sort((x, y) => y.total_hours - x.total_hours).slice(0, 6);
+  const maxHours = Math.max(50, ...hours.map((h) => h.total_hours));
+  const month = new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "long" });
 
   return (
     <>
-      <PageBar title="Dashboard" />
-      <Pane>
-        <div className="kpis">
-          <Kpi label="Shoots today" value={today.length} note={`${today.filter((j) => j.status === "reached").length} on site now`} />
-          <Kpi label="Unassigned" value={unassigned.length} alert={unassigned.length > 0}
-            note={`${unassigned.filter((j) => hoursSince(j.confirmed_at) > 48).length} waiting over 48 hours`} />
-          <Kpi label="Collected" value={inr(received)} />
-          <Kpi label="Outstanding" value={inr(outstanding)} note={`across ${(money ?? []).filter((m) => Number(m.balance) > 0).length} jobs`} />
-        </div>
+      <PageBar eyebrow={fullDay()} title="Today at Reeload">
+        <LinkButton href="/jobs?s=paid" variant="outline">Create download link</LinkButton>
+        <LinkButton href="/users">New user</LinkButton>
+      </PageBar>
 
-        <div className="card">
-          <h3>Jobs by stage</h3>
-          <div className="grid grid-cols-5 gap-1 md:grid-cols-10">
-            {PIPELINE.map((s) => {
-              const n = all.filter((j) => j.status === s).length;
-              const hot = s === "confirmed" && n > 0;
+      <Kpis>
+        <Kpi label="Today's shoots" value={d.today.shoots} note={`${accepted} accepted · ${awaiting} awaiting`} />
+        <Kpi label="Unassigned jobs" value={a.unassigned.total} tone={a.unassigned.flagged ? "bad" : "neutral"} note={`${a.unassigned.flagged} inside 48 hours`} />
+        <Kpi label="Collected this month" value={inr(d.money.received_this_month)} tone="ok" note="Advances and balances" />
+        <Kpi label="Outstanding" value={inr(d.money.outstanding)} tone="warn" note={`Across ${d.money.jobs_owing} open jobs`} />
+      </Kpis>
+
+      <div className="flex flex-wrap items-stretch gap-4">
+        <Panel title="Today's shoots" aside={<LinkButton href="/calendar" variant="ghost" size="sm">Open calendar</LinkButton>} className="flex-[2_1_520px]">
+          <DataTable
+            label="Today's shoots"
+            isEmpty={!shoots.length}
+            empty="No shoots today."
+            columns={[{ label: "Time" }, { label: "Client" }, { label: "Reelmaker" }, { label: "Status" }]}
+          >
+            {shoots.map((j) => {
+              const who = liveAssignment(j);
               return (
-                <div key={s} className={`rounded-lg px-2 pb-1.5 pt-2 text-xs capitalize ${hot ? "bg-recs text-rec" : "bg-sub text-mute"}`}>
-                  <b className={`block font-display text-lg ${hot ? "text-rec" : "text-ink"}`}>{n}</b>{s}
-                </div>
+                <Row key={j.id} href={`/jobs/${j.id}`}>
+                  <Cell className="font-mono text-[13px] whitespace-nowrap">{window_(j.starts_at, j.duration_minutes)}</Cell>
+                  <Cell>
+                    <div className="font-semibold">{j.client_name}</div>
+                    <div className="text-xs text-mute">{j.city}</div>
+                  </Cell>
+                  <Cell className={who ? "" : "font-semibold text-bad"}>{who?.full_name ?? "Unassigned"}</Cell>
+                  <Cell>{who ? <StatusChip status={j.status} /> : <Chip tone="bad">Needs reelmaker</Chip>}</Cell>
+                </Row>
               );
             })}
-          </div>
-        </div>
+          </DataTable>
+        </Panel>
 
-        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-          <div className="card">
-            <h3>Today&apos;s shoots</h3>
-            {today.length ? today.map((j) => (
-              <div key={j.id} className="flex items-center gap-3 border-b border-line px-1 py-2.5 last:border-0">
-                <span className="w-14 flex-none font-mono text-[13px]">{time(j.starts_at)}</span>
-                {live(j)?.profiles && <Avatar name={live(j)!.profiles!.full_name} />}
-                <div className="flex-1"><b>{j.clients?.name}</b><div className="text-[13px] text-mute">{j.city} · {live(j)?.profiles?.full_name ?? "Unassigned"}</div></div>
-                <StatusChip status={j.status} />
-              </div>
-            )) : <Empty>No shoots today.</Empty>}
-          </div>
-          <div className="grid content-start gap-4">
-            <div className="card">
-              <h3>Waiting for your approval</h3>
-              {(pending ?? []).length ? (pending ?? []).map((p) => {
-                const job = p.jobs as unknown as { code: string; clients: { name: string } } | null;
+        <Panel
+          title="Unassigned jobs"
+          aside={a.unassigned.flagged ? <span className="text-xs text-bad">{a.unassigned.flagged} inside 48 hours</span> : undefined}
+          className="flex-[1_1_320px]"
+        >
+          {queue.unassigned.length ? (
+            <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+              {queue.unassigned.slice(0, 6).map((j) => {
+                const hot = (j.hours_to_start ?? Infinity) < 48;
                 return (
-                  <div key={p.id} className="flex items-center gap-3 py-2">
-                    <div className="flex-1"><b>{job?.code} {p.reason}</b><div className="text-[13px] text-mute">+{inr(p.delta)} · {job?.clients?.name}</div></div>
-                    <ApprovePriceChange id={p.id} />
-                  </div>
-                );
-              }) : <div className="text-mute">Nothing to approve.</div>}
-            </div>
-            <div className="card">
-              <h3>Hours this month</h3>
-              {(hours ?? []).map((h) => {
-                const total = Number(h.booked_hours) + Number(h.extra_hours);
-                const name = nameOf(h.reelmaker_id) ?? "";
-                return (
-                  <div key={h.reelmaker_id} className="my-[7px] grid grid-cols-[84px_minmax(0,1fr)_48px] items-center gap-2.5">
-                    <span>{name.split(" ")[0]}</span>
-                    <span className="h-2.5 overflow-hidden rounded-full bg-sub"><i className="block h-full rounded-full bg-ink" style={{ width: `${(total / maxH) * 100}%` }} /></span>
-                    <span className="num">{total}h</span>
-                  </div>
+                  <li key={j.id} className={`flex items-center justify-between gap-3 rounded-[10px] border p-3 ${hot ? "border-[#f5c9c5] bg-[#fdf1f0]" : "border-line bg-sub"}`}>
+                    <div>
+                      <div className="text-sm font-semibold">{j.client_name}</div>
+                      <div className="text-xs text-mute2">{dayTime(j.starts_at)}</div>
+                    </div>
+                    <span className={`font-mono text-xs font-medium whitespace-nowrap ${hot ? "text-bad" : "text-mute2"}`}>{startsIn(j.hours_to_start)}</span>
+                  </li>
                 );
               })}
-            </div>
-          </div>
-        </div>
+            </ul>
+          ) : (
+            <Empty>Every job has a reelmaker.</Empty>
+          )}
+        </Panel>
+      </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="card">
-            <h3>Sales calls today</h3>
-            <table className="tbl"><thead><tr><th>Salesperson</th><th className="num">Spoken</th><th className="num">Approved</th><th className="num">Rejected</th></tr></thead>
-              <tbody>{(calls ?? []).map((c) => <tr key={c.salesperson_id}><td>{c.full_name}</td><td className="num">{c.spoken}</td><td className="num">{c.approved}</td><td className="num">{c.rejected}</td></tr>)}</tbody>
-            </table>
-          </div>
-          <div className="card">
-            <h3>Audit log <small className="ml-auto text-[13px] font-medium text-mute">Cannot be edited</small></h3>
-            {(audit ?? []).map((a) => (
-              <div key={a.id} className="flex gap-3 border-b border-line py-2 text-sm last:border-0">
-                <span className="w-[72px] flex-none font-mono text-[12.5px] text-mute">{time(a.at)}</span>
-                <div><b>{nameOf(a.actor_id) ?? "System"}</b> {a.action} {a.entity}</div>
+      <div className="flex flex-wrap items-stretch gap-4">
+        <Panel title={`Hours per reelmaker · ${month}`} className="flex-[1_1_300px]">
+          {hours.length ? (
+            hours.map((h) => (
+              <ProgressBar key={h.reelmaker_id} value={h.total_hours} maxValue={maxHours} aria-label={`${h.full_name}: ${h.total_hours} hours`} size="sm" color="accent" className="gap-1.5">
+                <div className="flex w-full justify-between text-[13px]">
+                  <span className="font-medium">{h.full_name} <span className="text-mute">· {h.shoots} shoots</span></span>
+                  <span className="font-mono">{h.total_hours} h</span>
+                </div>
+                <ProgressBar.Track>
+                  <ProgressBar.Fill />
+                </ProgressBar.Track>
+              </ProgressBar>
+            ))
+          ) : (
+            <Empty>No hours this month yet.</Empty>
+          )}
+          <p className="m-0 text-xs text-mute">Booked time plus extra time. Pay is worked out outside the app.</p>
+        </Panel>
+
+        <Panel title="Needs your approval" className="flex-[1_1_300px]">
+          {pending.length ? (
+            pending.map((p) => (
+              <div key={p.id} className="flex flex-col gap-2.5 rounded-[10px] border border-line p-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-warn">Price change</div>
+                  <div className="mt-0.5 text-sm">
+                    {p.code} · {p.reason} · {num(p.delta) > 0 ? "+" : ""}{inr(p.delta)} asked by {p.requested_by_name ?? "Sales"}
+                  </div>
+                </div>
+                <ApprovePriceChange id={p.id} />
               </div>
+            ))
+          ) : (
+            <Empty>Nothing waiting for you.</Empty>
+          )}
+          {a.approvals.extra_time > 0 && <p className="m-0 text-xs text-mute">{a.approvals.extra_time} extra-time decisions are waiting in Review files.</p>}
+        </Panel>
+
+        <Panel title="Sales contacts today" className="flex-[1_1_300px]">
+          <DataTable
+            label="Sales contacts today"
+            minWidth={260}
+            isEmpty={!contacts.counts.length}
+            empty="No calls logged today."
+            columns={[{ label: "Person" }, { label: "Spoken", align: "end" }, { label: "Approved", align: "end" }, { label: "Rejected", align: "end" }]}
+          >
+            {contacts.counts.map((p) => (
+              <Row key={p.salesperson_id}>
+                <Cell className="font-medium">{p.full_name}</Cell>
+                <Cell className="text-right font-mono">{p.spoken}</Cell>
+                <Cell className="text-right font-mono text-ok">{p.approved}</Cell>
+                <Cell className="text-right font-mono text-bad">{p.rejected}</Cell>
+              </Row>
             ))}
-          </div>
-        </div>
-      </Pane>
+          </DataTable>
+          <h3 className="m-0 mt-2 font-sans text-[13px] font-semibold tracking-normal text-mute">Latest audit entries</h3>
+          {d.recent_activity.length ? (
+            d.recent_activity.slice(0, 5).map((e) => (
+              <div key={e.id} className="flex gap-2.5 text-xs">
+                <span className="font-mono whitespace-nowrap text-mute">{time(e.at)}</span>
+                <span>{e.actor_name ?? "System"}: {e.action.replace(/_/g, " ")} {e.entity.replace(/_/g, " ")}</span>
+              </div>
+            ))
+          ) : (
+            <Empty>No activity yet.</Empty>
+          )}
+        </Panel>
+      </div>
+
+      <footer className="text-xs text-mute">Money is visible to Admin, Sales and Accounts only.</footer>
     </>
   );
 }

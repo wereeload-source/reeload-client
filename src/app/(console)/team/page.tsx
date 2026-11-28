@@ -1,40 +1,62 @@
-import { requireProfile } from "@/lib/supabase/server";
-import { PageBar, Pane } from "@/components/page-bar";
-import { Avatar, Chip } from "@/components/ui";
+import { Cell, DataTable, Row } from "@/components/data-table";
+import { DateJump } from "@/components/date-jump";
+import { PageBar } from "@/components/page-bar";
+import { Avatar, Chip, Panel } from "@/components/ui";
+import { istDate } from "@/lib/format";
+import { api, requirePage } from "@/lib/session";
+import type { HoursRow, Reelmaker } from "@/lib/types";
 
-// Hours only: the system does not calculate pay (section 7).
-export default async function TeamPage() {
-  const { supabase } = await requireProfile();
-  const month = new Date(); month.setDate(1);
-  const [{ data: rms }, { data: hours }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, phone, active, reelmakers(kind, base_city)").eq("role", "reelmaker").order("full_name"),
-    supabase.from("reelmaker_hours").select("*").eq("month", month.toISOString().slice(0, 10)),
+// Hours only: the system does not calculate pay.
+export default async function TeamPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  await requirePage("team");
+  const { month: raw } = await searchParams;
+  const month = raw && /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : istDate().slice(0, 7);
+  const [reelmakers, hours] = await Promise.all([
+    api.get<Reelmaker[]>("/reelmakers?include_inactive=true"),
+    api.get<{ month: string; items: HoursRow[] }>(`/hours?month=${month}`),
   ]);
+
   return (
     <>
-      <PageBar title="Reelmakers" />
-      <Pane>
-        <div className="card px-2 py-1.5">
-          <table className="tbl">
-            <thead><tr><th>Reelmaker</th><th>Type</th><th>Phone</th><th className="num">Shoots</th><th className="num">Hours</th></tr></thead>
-            <tbody>
-              {(rms ?? []).map((r) => {
-                const h = (hours ?? []).find((x) => x.reelmaker_id === r.id);
-                const rm = r.reelmakers as unknown as { kind: string; base_city: string } | null;
-                return (
-                  <tr key={r.id}>
-                    <td><div className="flex items-center gap-2.5"><Avatar name={r.full_name} /><div><b>{r.full_name}</b><div className="text-[12.5px] text-mute">{rm?.base_city}</div></div></div></td>
-                    <td className="capitalize">{rm?.kind.replace("_", "-")} {!r.active && <Chip>Inactive</Chip>}</td>
-                    <td className="font-mono">{r.phone}</td>
-                    <td className="num">{h?.shoots ?? 0}</td>
-                    <td className="num">{h ? Number(h.booked_hours) + Number(h.extra_hours) : 0}h{Number(h?.extra_hours) > 0 && <span className="text-mute"> +{h?.extra_hours}</span>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Pane>
+      <PageBar title="Reelmakers and leave" note="Booked time plus extra time. Pay is worked out outside the app." />
+      <DateJump action="/team" name="month" label="Month" type="month" value={month} />
+      <Panel title="Hours this month">
+        <DataTable
+          label="Reelmaker hours"
+          minWidth={620}
+          isEmpty={!reelmakers.length}
+          empty="No reelmakers yet. Admin adds them under Users."
+          columns={[{ label: "Reelmaker" }, { label: "Type" }, { label: "Phone" }, { label: "Shoots", align: "end" }, { label: "Hours", align: "end" }]}
+        >
+          {reelmakers.map((r) => {
+            const h = hours.items.find((x) => x.reelmaker_id === r.id);
+            return (
+              <Row key={r.id}>
+                <Cell>
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={r.full_name} />
+                    <div>
+                      <div className="font-semibold">{r.full_name}</div>
+                      <div className="text-xs text-mute">{r.base_city}</div>
+                    </div>
+                  </div>
+                </Cell>
+                <Cell>
+                  <span className="flex items-center gap-2">
+                    {r.kind === "full_time" ? "Full-time" : "Freelance"} {!r.active && <Chip>Inactive</Chip>}
+                  </span>
+                </Cell>
+                <Cell className="font-mono text-[13px]">{r.phone}</Cell>
+                <Cell className="text-right font-mono">{h?.shoots ?? 0}</Cell>
+                <Cell className="text-right font-mono">
+                  {h?.total_hours ?? 0} h{(h?.extra_hours ?? 0) > 0 && <span className="text-mute"> (incl. {h!.extra_hours} h extra)</span>}
+                </Cell>
+              </Row>
+            );
+          })}
+        </DataTable>
+      </Panel>
+      <p className="m-0 text-[13px] text-mute">Leave is added and removed on the Unassigned page, where it blocks bookings.</p>
     </>
   );
 }

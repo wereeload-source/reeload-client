@@ -1,22 +1,14 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { ActionButton } from "@/components/action-button";
+import { apiClient } from "@/lib/api-client";
 
+/** Approve (dark) and Reject (outline), as on the dashboard mockup. */
 export function ApprovePriceChange({ id }: { id: string }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const decide = async (approve: boolean) => {
-    setBusy(true);
-    const { error } = await createClient().rpc("decide_price_change", { p_change: id, p_approve: approve });
-    setBusy(false);
-    if (error) alert(error.message);
-    router.refresh();
-  };
+  const decide = (approve: boolean) => () => apiClient.post(`/price-changes/${encodeURIComponent(id)}/decision`, { approve });
   return (
-    <div className="flex gap-1.5">
-      <button className="btn" disabled={busy} onClick={() => decide(false)}>Reject</button>
-      <button className="btn btn-pri" disabled={busy} onClick={() => decide(true)}>Approve</button>
+    <div className="flex gap-2">
+      <ActionButton variant="primary" size="md" className="flex-1 bg-ink" run={decide(true)} success="Approved">Approve</ActionButton>
+      <ActionButton variant="outline" size="md" className="flex-1" run={decide(false)} success="Rejected" confirm="Reject this price change?">Reject</ActionButton>
     </div>
   );
 }

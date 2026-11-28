@@ -1,90 +1,191 @@
 "use client";
+import { Alert, Button, Card, Link, Radio, RadioGroup, Spinner, toast } from "@heroui/react";
+import { UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { Avatar, Chip, Empty } from "@/components/ui";
-import { day, hoursSince, time } from "@/lib/format";
-import type { Job } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { Chip, Empty, Facts } from "@/components/ui";
+import { apiClient, errorText } from "@/lib/api-client";
+import { dayTime, hours, startsIn, window_ } from "@/lib/format";
+import type { Candidate, QueueJob } from "@/lib/types";
 
-type Range = { reelmaker_id: string; time_range: string };
+const STATE = {
+  free: { label: "Free", text: "text-ok" },
+  busy: { label: "Not available", text: "text-bad" },
+  leave: { label: "Not available", text: "text-bad" },
+} as const;
 
-/** Parses a Postgres tstzrange like ["2026-11-27 10:00:00+00","2026-11-27 13:00:00+00"). */
-function parseRange(r: string): [number, number] {
-  const [a, b] = r.slice(1, -1).split(",").map((s) => s.replace(/"/g, "").trim());
-  return [a ? Date.parse(a.replace(" ", "T")) : -Infinity, b ? Date.parse(b.replace(" ", "T")) : Infinity];
-}
-const overlaps = (ranges: Range[], id: string, from: number, to: number) =>
-  ranges.some((r) => r.reelmaker_id === id && (([a, b]) => a < to && from < b)(parseRange(r.time_range)));
+const pickCard =
+  "flex w-full flex-col items-stretch gap-1.5 text-left rounded-[10px] border-2 border-line bg-paper p-3.5 transition-colors data-[selected=true]:border-rec data-[selected=true]:bg-recs data-[focus-visible=true]:border-rec data-[disabled=true]:bg-sub data-[disabled=true]:opacity-70";
 
-export function AssignBoard({ jobs, reelmakers, booked, leave }: {
-  jobs: Job[]; reelmakers: { id: string; name: string; kind: string }[]; booked: Range[]; leave: Range[];
-}) {
+const note = (c: Candidate) =>
+  c.availability === "leave"
+    ? "On leave at this time."
+    : c.availability === "busy"
+      ? "Overlaps a booking at this time."
+      : `${c.base_city}${c.same_city ? ", same city" : ""}. ${c.shoots_next7_days} ${c.shoots_next7_days === 1 ? "shoot" : "shoots"} this week.`;
+
+/** Operations: pick an unassigned job on the left, a free reelmaker on the right, assign (the mockup's flow). */
+export function AssignBoard({ jobs }: { jobs: QueueJob[] }) {
   const router = useRouter();
-  const [pick, setPick] = useState(jobs[0]?.id);
+  const [pick, setPick] = useState<string | undefined>(jobs[0]?.id);
+  // Candidates are kept per job, so switching jobs shows a spinner until that job's list arrives.
+  const [loaded, setLoaded] = useState<{ job: string; list: Candidate[] } | null>(null);
   const [rm, setRm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const job = jobs.find((j) => j.id === pick);
-  const from = job?.starts_at ? Date.parse(job.starts_at) : 0;
-  const to = from + (job?.duration_minutes ?? 0) * 60_000;
+  // After an assignment the job leaves the list: move on to the next one instead of showing nothing.
+  const job = jobs.find((j) => j.id === pick) ?? jobs[0];
+  const jobId = job?.id;
+  const candidates = loaded && loaded.job === jobId ? loaded.list : null;
+  const chosen = candidates?.find((c) => c.id === rm) ?? null;
 
-  async function assign() {
-    if (!job || !rm) return;
-    setBusy(true); setError(null);
-    const { error } = await createClient().rpc("assign_job", { p_job: job.id, p_reelmaker: rm });
-    setBusy(false);
-    if (error) return setError(error.message);
+  useEffect(() => {
+    if (!jobId) return;
+    let live = true;
+    apiClient
+      .get<Candidate[]>(`/jobs/${encodeURIComponent(jobId)}/candidates`)
+      .then((c) => live && (setLoaded({ job: jobId, list: c }), setError(null)))
+      .catch((e) => live && (setLoaded({ job: jobId, list: [] }), setError(errorText(e))));
+    return () => {
+      live = false;
+    };
+  }, [jobId]);
+
+  function choose(id: string) {
+    setPick(id);
     setRm(null);
-    router.refresh();
+    setError(null);
   }
 
+  async function assign() {
+    if (!job || !chosen) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(`/jobs/${encodeURIComponent(job.id)}/assign`, { reelmaker_id: chosen.id });
+      toast.success(`Assigned to ${chosen.full_name}. Their calendar is blocked and they have been asked to accept.`);
+      setRm(null);
+      router.refresh();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!jobs.length) {
+    return (
+      <Card className="p-6">
+        <Empty icon={UserRoundCheck}>Every confirmed job has a reelmaker.</Empty>
+      </Card>
+    );
+  }
+
+  const hot = (job?.hours_to_start ?? Infinity) < 48;
+  const message = chosen
+    ? { text: `No conflict found for ${chosen.full_name}. The slot will be blocked when you assign.`, tone: "text-ok" }
+    : { text: "Pick a reelmaker. Unavailable people are greyed out so a double booking cannot happen.", tone: "text-mute2" };
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-      <div className="card px-2 py-1.5">
-        {jobs.length ? (
-          <table className="tbl">
-            <thead><tr><th>Job</th><th>Client</th><th>When</th><th>Waiting</th></tr></thead>
-            <tbody>
-              {jobs.map((j) => {
-                const h = hoursSince(j.confirmed_at);
-                return (
-                  <tr key={j.id} onClick={() => { setPick(j.id); setRm(null); }} className={`cursor-pointer hover:bg-sub ${j.id === pick ? "outline-2 -outline-offset-2 outline-rec" : ""}`}>
-                    <td className="text-mute">{j.code}</td>
-                    <td><b>{j.clients?.name}</b><div className="text-[13px] text-mute">{j.city} · {(j.duration_minutes ?? 0) / 60}h shoot</div></td>
-                    <td className="whitespace-nowrap">{day(j.starts_at)} · {time(j.starts_at)}</td>
-                    <td>{h > 48 ? <span className="text-[13px] font-semibold text-rec">⚠ {h}h</span> : <span className="text-mute">{h}h</span>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : <Empty>Every confirmed job has a reelmaker.</Empty>}
-      </div>
-      <div className="card">
-        {job ? (
-          <>
-            <h3>{job.clients?.name}</h3>
-            <div className="text-sm text-mute">{job.code} · {day(job.starts_at)}, {time(job.starts_at)} for {(job.duration_minutes ?? 0) / 60}h · {job.city}</div>
-            <p className="my-2.5 text-sm">{job.brief}</p>
-            <div className="mt-1.5 text-sm font-semibold">Available reelmakers</div>
-            {reelmakers.map((r) => {
-                const onLeave = overlaps(leave, r.id, from, to);
-                const busyAt = overlaps(booked, r.id, from, to);
-                const dis = onLeave || busyAt;
-                return (
-                  <button key={r.id} disabled={dis} onClick={() => setRm(r.id)}
-                    className={`mt-2 flex w-full items-center gap-2.5 rounded-xl border bg-paper p-2.5 text-left ${rm === r.id ? "border-rec shadow-[0_0_0_2px_var(--recs)]" : "border-line"} ${dis ? "cursor-not-allowed opacity-55" : ""}`}>
-                    <Avatar name={r.name} />
-                    <span className="flex-1"><b>{r.name}</b><br /><span className="text-[13px] capitalize text-mute">{r.kind.replace("_", "-")}</span></span>
-                    {onLeave ? <Chip>On leave</Chip> : busyAt ? <Chip tone="rec">Overlaps</Chip> : <Chip tone="ok">Free</Chip>}
-                  </button>
-                );
-              })}
-            {error && <p className="mt-3 rounded-lg bg-recs p-2.5 text-[13px] text-rec">{error}</p>}
-            <button className="btn btn-pri mt-3 w-full justify-center" disabled={!rm || busy} onClick={assign}>Assign and block calendar</button>
-          </>
-        ) : <div className="text-mute">Pick a job on the left.</div>}
-      </div>
+    <div className="flex flex-wrap items-start gap-5">
+      <Card className="max-w-[420px] min-w-[280px] flex-[1_1_320px] p-3">
+        <RadioGroup aria-label="Unassigned jobs" value={jobId ?? null} onChange={choose} className="gap-2">
+          {jobs.map((j) => {
+            const soon = (j.hours_to_start ?? Infinity) < 48;
+            return (
+              <Radio key={j.id} value={j.id} className="w-full">
+                <Radio.Content className={pickCard}>
+                  <span className="flex items-center justify-between gap-2.5">
+                    <span className="text-[15px] font-semibold text-ink">{j.client_name}</span>
+                    <span className={`rounded-md px-2 py-0.5 font-mono text-xs font-medium whitespace-nowrap ${soon ? "bg-bads text-bad" : "bg-neutrals text-neutral"}`}>
+                      {startsIn(j.hours_to_start)}
+                    </span>
+                  </span>
+                  <span className="text-[13px] text-mute2">{dayTime(j.starts_at)} · {j.city}</span>
+                  {j.last_release && (
+                    <span className="text-xs text-warn">
+                      {j.last_release.reelmaker} {j.last_release.status}{j.last_release.reason ? `: ${j.last_release.reason}` : ""}
+                    </span>
+                  )}
+                </Radio.Content>
+              </Radio>
+            );
+          })}
+        </RadioGroup>
+      </Card>
+
+      {job && (
+        <section aria-label="Job detail" className="flex min-w-0 flex-[2_1_520px] flex-col gap-4">
+          <Card className="gap-3.5 px-6 py-[22px]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="m-0 text-[22px] font-semibold">{job.client_name}</h2>
+              <Chip tone={hot ? "bad" : "neutral"}>{hot ? "Inside 48 hours" : "Unassigned"}</Chip>
+            </div>
+            <Facts
+              items={[
+                { label: "When", value: `${dayTime(job.starts_at)} (${window_(job.starts_at, job.duration_minutes)}, ${hours(job.duration_minutes)})` },
+                {
+                  label: "Where",
+                  value: (
+                    <>
+                      {job.address ?? job.city}
+                      {job.maps_url && (
+                        <>
+                          {" · "}
+                          <Link href={job.maps_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-info">Open map</Link>
+                        </>
+                      )}
+                    </>
+                  ),
+                },
+                { label: "On-site contact", value: [job.onsite_contact_name, job.onsite_contact_phone].filter(Boolean).join(", ") || "Not given" },
+              ]}
+            />
+            {job.brief && (
+              <div className="rounded-[10px] bg-sub px-3.5 py-3 text-sm leading-normal">
+                <strong>Brief.</strong> {job.brief}
+              </div>
+            )}
+          </Card>
+
+          <Card className="gap-3 px-6 py-[22px]">
+            <h3 className="m-0 text-lg font-semibold">Reelmakers for this slot</h3>
+            {candidates === null ? (
+              <div className="grid place-items-center p-6"><Spinner aria-label="Loading reelmakers" /></div>
+            ) : candidates.length === 0 && !error ? (
+              <Empty>No active reelmakers.</Empty>
+            ) : (
+              <RadioGroup aria-label="Choose a reelmaker" value={rm} onChange={setRm} className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-2.5">
+                {candidates.map((c) => (
+                  <Radio key={c.id} value={c.id} isDisabled={c.availability !== "free"} className="w-full">
+                    <Radio.Content className={pickCard}>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-[15px] font-semibold text-ink">
+                          {c.full_name} <span className="text-xs font-normal text-mute">· {c.kind === "full_time" ? "Full-time" : "Freelance"}</span>
+                        </span>
+                        <span className={`text-xs font-semibold ${STATE[c.availability].text}`}>{STATE[c.availability].label}</span>
+                      </span>
+                      <span className="text-[13px] leading-snug text-mute2">{note(c)}</span>
+                    </Radio.Content>
+                  </Radio>
+                ))}
+              </RadioGroup>
+            )}
+            {error && (
+              <Alert status="danger">
+                <Alert.Indicator />
+                <Alert.Content><Alert.Description>{error}</Alert.Description></Alert.Content>
+              </Alert>
+            )}
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-3">
+              <div role="status" className={`flex-[1_1_280px] text-[13px] font-medium ${message.tone}`}>{message.text}</div>
+              <Button size="lg" isDisabled={!chosen} isPending={busy} onPress={assign}>
+                {chosen ? `Assign ${chosen.full_name}` : "Assign"}
+              </Button>
+            </div>
+          </Card>
+        </section>
+      )}
     </div>
   );
 }

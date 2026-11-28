@@ -1,39 +1,79 @@
 "use client";
+import { Button, Card, Form, ToggleButton, ToggleButtonGroup, toast } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { TextInput } from "@/components/fields";
+import { apiClient, errorText } from "@/lib/api-client";
 import { inr } from "@/lib/format";
+import type { PaymentMethod } from "@/lib/types";
 
-export function RecordPayment({ jobId, code, balance }: { jobId: string; code: string; balance: number }) {
+const METHODS: { id: PaymentMethod; label: string; hint: string }[] = [
+  { id: "upi", label: "UPI", hint: "UPI transaction ID" },
+  { id: "bank_transfer", label: "Bank", hint: "Bank reference" },
+  { id: "cash", label: "Cash", hint: "Cash receipt number (optional)" },
+];
+
+/** "Record a payment" from the Accounts mockup: amount, UPI / Bank / Cash, reference. */
+export function RecordPayment({ jobId, balance, owed, canPay }: { jobId: string; balance: number; owed: number; canPay: boolean }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("upi");
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const amt = Number(amount) || 0;
+  const needRef = method !== "cash";
+  const paid = balance <= 0;
+  const ready = canPay && !paid && amt > 0 && amt <= balance && (!needRef || reference.trim().length > 0);
 
-  async function save(f: FormData) {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from("payments").insert({
-      job_id: jobId, amount: Number(f.get("amount")), method: f.get("method"), reference: f.get("reference") || null, recorded_by: user?.id,
-    });
-    if (error) return setError(error.message);
-    setOpen(false);
-    router.refresh();
+  let note = { text: "Balance = agreed amount + approved changes − payments. The job shows Paid at zero.", cls: "text-mute2" };
+  if (!canPay) note = { text: "Payments can only be recorded on confirmed jobs.", cls: "text-warn" };
+  else if (paid) note = { text: "This job is Paid. Operations can now create the 7-day download link.", cls: "text-ok" };
+  else if (amt > balance) note = { text: `This is more than the balance of ${inr(balance)}. Check the amount before recording.`, cls: "text-warn" };
+
+  async function record() {
+    if (!ready) return;
+    setBusy(true);
+    try {
+      await apiClient.post(`/jobs/${encodeURIComponent(jobId)}/payments`, { amount: amt, method, reference: reference.trim() || null });
+      toast.success(`${inr(amt)} recorded${amt >= balance ? ". The job is now Paid." : "."}`);
+      setAmount("");
+      setReference("");
+      router.refresh();
+    } catch (e) {
+      toast.danger(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  if (!open) return <button className="btn" onClick={() => setOpen(true)}>Record payment</button>;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4 text-left" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-      <form action={save} className="w-full max-w-md rounded-2xl border border-line bg-paper p-5">
-        <h3 className="text-xl font-semibold">Record payment</h3>
-        <div className="text-sm text-mute">{code} · balance {inr(balance)}</div>
-        <div className="my-3.5 grid grid-cols-2 gap-3">
-          <label className="label">Amount (₹)<input className="input" name="amount" inputMode="numeric" defaultValue={balance} required /></label>
-          <label className="label">Method<select className="input" name="method"><option value="upi">UPI</option><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option></select></label>
-          <label className="label col-span-2">Reference<input className="input" name="reference" /></label>
+    <Card className="gap-3.5 px-6 py-[22px]">
+      <h3 className="m-0 text-lg font-semibold">Record a payment</h3>
+      <Form onSubmit={(e) => (e.preventDefault(), record())} className="flex flex-wrap items-end gap-3.5">
+        <TextInput name="amount" label="Amount (₹)" inputMode="numeric" placeholder="0" value={amount} onChange={(v) => setAmount(v.replace(/[^0-9]/g, ""))} className="flex-[1_1_160px]" inputClassName="font-mono" />
+        <div className="flex flex-[1_1_220px] flex-col gap-1.5">
+          <span id="method-label" className="text-sm font-medium">Method</span>
+          <ToggleButtonGroup
+            aria-labelledby="method-label"
+            selectionMode="single"
+            disallowEmptySelection
+            selectedKeys={new Set([method])}
+            onSelectionChange={(keys) => setMethod(([...keys][0] as PaymentMethod) ?? "upi")}
+            className="w-full"
+          >
+            {METHODS.map((m, i) => (
+              <ToggleButton key={m.id} id={m.id} className="flex-1">
+                {i > 0 && <ToggleButtonGroup.Separator />}
+                {m.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
         </div>
-        {error && <p className="mb-3 text-[13px] text-rec">{error}</p>}
-        <div className="flex justify-end gap-2"><button type="button" className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn-pri">Save payment</button></div>
-      </form>
-    </div>
+        <TextInput name="reference" label="Reference" placeholder={METHODS.find((m) => m.id === method)!.hint} value={reference} onChange={setReference} maxLength={120} className="flex-[2_1_220px]" />
+        <Button type="submit" isDisabled={!ready} isPending={busy}>Record payment</Button>
+      </Form>
+      <div role="status" className={`text-[13px] font-medium ${note.cls}`}>{note.text}</div>
+      <div className="text-xs text-mute">Owed in total: {inr(owed)} · Balance now: {inr(balance)}</div>
+    </Card>
   );
 }
